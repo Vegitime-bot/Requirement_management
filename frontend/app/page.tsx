@@ -19,7 +19,7 @@ interface ProductGroup {
   created_at: string;
 }
 
-const API_BASE_URL = "http://100.73.184.77:8010";
+const API_BASE_URL = "/api";
 
 export default function Home() {
   const [groups, setGroups] = useState<ProductGroup[]>([]);

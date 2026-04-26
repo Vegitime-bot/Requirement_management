@@ -2,13 +2,14 @@
 const nextConfig = {
   reactStrictMode: true,
   async rewrites() {
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:8020';
     return [
       {
         source: '/api/:path*',
-        destination: 'http://100.73.184.77:8010/:path*',
+        destination: `${backendUrl}/:path*`,
       },
-    ]
+    ];
   },
-}
+};
 
-module.exports = nextConfig
+module.exports = nextConfig;
