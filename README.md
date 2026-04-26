@@ -2,13 +2,15 @@
 
 > **AI-Powered Requirements Extraction & Version Management Platform**
 
+---
+
 ## 🎯 What is RMS?
 
-RMS는 **AI 기반 요구사항 관리 시스템**입니다. 문서, 이메일, 회의록 등 비정형 데이터에서 자동으로 제품 요구사항을 추출하고, 버전 관리하며, 팀이 효율적으로 협업할 수 있게 합니다.
+RMS는 **AI 기반 요구사항 관리 시스템**입니다. 비정형 데이터(이메일, 문서, 회의록)에서 자동으로 제품 요구사항을 추출하고, 체계적인 버전 관리와 협업 기능을 제공합니다.
 
 ---
 
-## 🏗️ Architecture Overview
+## 🏗️ System Architecture
 
 ```mermaid
 flowchart TB
@@ -20,22 +22,22 @@ flowchart TB
     end
 
     subgraph AI["🤖 AI Processing Layer"]
-        B1["LLM<br/>Kimi-k2.5"]
-        B2["Embedding<br/>BGE-M3"]
-        B3["유사도 매칭<br/>Cosine 0.75+"]
+        B1["LLM Engine<br/>요구사항 추출"]
+        B2["Embedding Engine<br/>의미적 유사도 계산"]
+        B3["Smart Matcher<br/>중복 감지"]
     end
 
     subgraph Core["💡 Core System"]
-        C1["요구사항 추출"]
-        C2["중복 검사"]
-        C3["버전 관리"]
-        C4["ID 자동 생성"]
+        C1["Requirement Extractor"]
+        C2["Duplicate Detector"]
+        C3["Version Manager"]
+        C4["ID Generator"]
     end
 
     subgraph Output["📤 Output Layer"]
-        D1["구조화된 요구사항"]
-        D2["버전 스냅샷"]
-        D3["변경 이력"]
+        D1["Structured Requirements"]
+        D2["Version Snapshots"]
+        D3["Change History"]
     end
 
     Input --> B1
@@ -53,16 +55,16 @@ flowchart TB
 
 ### 1. AI Context Ingestion 🤖
 
-**Before:** 수동으로 요구사항 입력
-**After:** 문서/이메일 업로드 → AI가 자동 추출
+**Before:** 수동으로 요구사항 입력  
+**After:** 문서 업로드 → AI가 자동 추출
 
 ```mermaid
 sequenceDiagram
     participant User as 사용자
-    participant API as /ingest/analyze
-    participant LLM as Kimi-k2.5
-    participant Embed as BGE-M3
-    participant DB as SQLite
+    participant API as Ingestion API
+    participant LLM as LLM Engine
+    participant Embed as Embedding Engine
+    participant DB as Database
 
     User->>API: 원본 텍스트 업로드
     API->>LLM: 요구사항 추출 요청
@@ -73,18 +75,25 @@ sequenceDiagram
     API-->>User: 추천 액션 (create/update/skip)
 ```
 
-**예시:**
-```
-입력: "The system must implement OAuth2 authentication for secure user login. 
-       Users should be able to export their data to CSV format."
+**Example:**
 
-출력:
+```
+📧 Input (Email):
+"안녕하세요, 시스템에 OAuth2 로그인 기능을 추가해주세요. 
+또한 사용자 데이터를 CSV로 내보낼 수 있으면 좋겠습니다. 
+다음 주 금요일까지 완료 부탁드립니다."
+
+↓ AI Analysis
+
+📋 Output (Structured Requirements):
 ┌─────────────────────────────────────────────────────────┐
-│ 📌 OAuth2 Authentication Support                        │
-│    └─ 우선순위: critical | confidence: 0.9               │
+│ 📌 REQ-001: OAuth2 Authentication Support               │
+│    └─ Priority: Critical | Confidence: 0.92          │
 │                                                          │
-│ 📌 CSV Data Export                                       │
-│    └─ 우선순위: medium | confidence: 0.9                 │
+│ 📌 REQ-002: CSV Data Export                             │
+│    └─ Priority: Medium | Confidence: 0.89            │
+│                                                          │
+│ 🗑️ Filtered: "다음 주 금요일까지" (Deadline, not req)  │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -94,23 +103,23 @@ sequenceDiagram
 
 ```mermaid
 graph LR
-    subgraph ID["요구사항 ID 체계"]
-        A["Product Code<br/>VR51"]
-        B["Variant Code<br/>STD"]
-        C["Category Code<br/>SEC"]
+    subgraph ID["Requirement ID Format"]
+        A["Product Code<br/>VR51"] ---
+        B["Variant Code<br/>STD"] ---
+        C["Category Code<br/>SEC"] ---
         D["Sequence<br/>0001"]
     end
     
     ID --> E["VR51-STD-SEC-0001"]
-    style E fill:#4CAF50,stroke:#333,stroke-width:2px,color:#fff
+    style E fill:#4CAF50,stroke:#333,stroke-width:3px,color:#fff
 ```
 
-**형식:** `{ProductCode}-{VariantCode}-{CategoryCode}-{Seq:04d}`
+**Format:** `{ProductCode}-{VariantCode}-{CategoryCode}-{Seq:04d}`
 
-| 예시 | 설명 |
-|------|------|
-| `VR51-STD-SEC-0001` | VR51 제품, Standard 변형, Security 카테고리, 1번 |
-| `VR51-PRO-CORE-0042` | VR51 제품, Pro 변형, Core 카테고리, 42번 |
+| Example | Description |
+|---------|-------------|
+| `VR51-STD-SEC-0001` | VR51 Product, Standard Variant, Security Category, #1 |
+| `VR51-PRO-CORE-0042` | VR51 Product, Pro Variant, Core Category, #42 |
 
 ---
 
@@ -127,14 +136,15 @@ gitGraph
     commit id: "v2.0-stable"
 ```
 
-**특정 시점의 요구사항 전체 스냅샷 저장**
+**Capabilities:**
+- 특정 시점의 요구사항 전체 스냅샷 저장
 - 언제든 이전 버전으로 rollback 가능
 - 버전 간 diff 비교
 - 릴리즈 관리
 
 ---
 
-## 🛠️ Tech Stack
+## 🛠️ Technology Stack
 
 ```mermaid
 mindmap
@@ -142,28 +152,26 @@ mindmap
     Backend
       FastAPI
       SQLModel
-      SQLite
+      Python 3.9+
     AI/ML
-      Kimi-k2.5
-      BGE-M3
-      Ollama
+      LLM Engine
+      Embedding Model
     Frontend
       Next.js
-      shadcn/ui
+      React
       Tailwind CSS
-    Infrastructure
-      Tailscale
-      uvicorn
+    Database
+      Relational DB
+      SQL
 ```
 
-| 레이어 | 기술 | 용도 |
-|--------|------|------|
+| Layer | Technology | Purpose |
+|-------|------------|---------|
 | **Backend** | FastAPI + SQLModel | REST API, ORM |
-| **Database** | SQLite (POC) / PostgreSQL (Prod) | 데이터 영속화 |
-| **LLM** | Kimi-k2.5 (Ollama) | 요구사항 추출 |
-| **Embedding** | BGE-M3 (Ollama) | 의미적 유사도 계산 |
-| **Frontend** | Next.js 14 + shadcn/ui | 사용자 인터페이스 |
-| **Network** | Tailscale | 보안 원격 접근 |
+| **Database** | PostgreSQL | Data Persistence |
+| **LLM** | OpenAI Compatible API | Requirement Extraction |
+| **Embedding** | Vector Embeddings | Semantic Similarity |
+| **Frontend** | Next.js + React | User Interface |
 
 ---
 
@@ -171,8 +179,8 @@ mindmap
 
 ```mermaid
 flowchart LR
-    A["📝 Raw Context<br/>이메일/문서"] -->|"POST /ingest/analyze"| B["🤖 LLM Processing"]
-    B -->|"Extracted JSON"| C["📊 Similarity Check<br/>BGE-M3 Embedding"]
+    A["📝 Raw Context<br/>Email/Doc/Meeting"] -->|"POST /ingest/analyze"| B["🤖 LLM Processing"]
+    B -->|"Extracted JSON"| C["📊 Similarity Check<br/>Embedding"]
     C -->|"Suggestions"| D["👤 Human Review"]
     D -->|"Selected Actions"| E["💾 Apply Changes<br/>POST /ingest/apply"]
     E -->|"req_id generated"| F["📦 Requirement Saved"]
@@ -181,19 +189,19 @@ flowchart LR
 
 ---
 
-## 📊 API Endpoints
+## 📊 API Overview
 
 ```mermaid
 graph TB
-    subgraph API["REST API Layer"]
-        A1["/products<br/>CRUD"]
-        A2["/products/{id}/requirements<br/>CRUD + Actions"]
-        A3["/products/{id}/versions<br/>버전 관리"]
-        A4["/products/{id}/variants<br/>변형 관리"]
-        A5["/products/{id}/categories<br/>카테고리"]
-        A6["/ingest/analyze<br/>AI 추출"]
-        A7["/ingest/apply<br/>적용"]
-        A8["/product-groups<br/>그룹 관리"]
+    subgraph API["REST API Endpoints"]
+        A1["/products<br/>Product CRUD"]
+        A2["/products/{id}/requirements<br/>Requirement Management"]
+        A3["/products/{id}/versions<br/>Version Control"]
+        A4["/products/{id}/variants<br/>Variant Management"]
+        A5["/products/{id}/categories<br/>Category Management"]
+        A6["/ingest/analyze<br/>AI Extraction"]
+        A7["/ingest/apply<br/>Apply Changes"]
+        A8["/product-groups<br/>Team Collaboration"]
     end
 
     style A6 fill:#FF6B6B,stroke:#333,color:#fff
@@ -202,45 +210,77 @@ graph TB
 
 ### Core Endpoints
 
-| Method | Endpoint | 설명 |
-|--------|----------|------|
-| POST | `/ingest/analyze` | AI 요구사항 추출 |
-| POST | `/ingest/apply` | 추출 결과 적용 |
-| GET/POST | `/products/{id}/requirements` | 요구사항 CRUD |
-| GET/POST | `/products/{id}/versions` | 버전 관리 |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/ingest/analyze` | AI-powered requirement extraction |
+| POST | `/ingest/apply` | Apply extracted requirements |
+| GET/POST | `/products/{id}/requirements` | Requirement CRUD + Actions |
+| GET/POST | `/products/{id}/versions` | Version management |
 
 ---
 
 ## 🎯 Use Cases
 
-### Scenario 1: 이메일에서 요구사항 추출
+### Scenario 1: Email to Structured Requirements
 
 ```
-📧 수신 이메일:
+📧 Received Email:
 "안녕하세요, 시스템에 OAuth2 로그인 기능을 추가해주세요. 
- 또한 사용자 데이터를 CSV로 내보낼 수 있으면 좋겠습니다. 
- 다음 주 금요일까지 완료 부탁드립니다."
+또한 사용자 데이터를 CSV로 내보낼 수 있으면 좋겠습니다. 
+다음 주 금요일까지 완료 부탁드립니다."
 
-↓ AI 분석
+↓ AI Processing
 
-📋 추출된 요구사항:
+📋 Extracted Requirements:
    ✅ REQ-001: OAuth2 Authentication (critical)
    ✅ REQ-002: CSV Data Export (medium)
-   ❌ 납기일 요청 (필터링됨)
+   ❌ Deadline request (filtered out)
+
+💡 Suggested Actions:
+   - Create REQ-001: New requirement
+   - Create REQ-002: New requirement
 ```
 
-### Scenario 2: 버전 관리
+### Scenario 2: Duplicate Prevention
 
 ```
-📦 v1.0-beta 릴리즈:
-   - OAuth2 로그인
-   - CSV 내보내기
-   - 기본 검색 기능
+📝 New Input: "Implement OAuth2-based user authentication"
 
-📦 v1.0-stable 릴리즈:
-   + SAML SSO 추가
-   + 성능 최적화
+🔍 Existing: "Add OAuth2 login support for secure access"
+
+📊 Similarity Score: 0.835 (High)
+
+💡 Suggestion: UPDATE existing requirement instead of creating duplicate
 ```
+
+### Scenario 3: Version Management
+
+```
+📦 v1.0-beta Release:
+   - OAuth2 Authentication
+   - CSV Export
+   - Basic Search
+
+📦 v1.0-stable Release:
+   + SAML SSO (added)
+   + Performance Optimization (added)
+   
+🔒 Snapshot saved: All requirements at v1.0-stable state
+```
+
+---
+
+## 🏆 Key Achievements
+
+| Feature | Technology | Status |
+|---------|------------|--------|
+| AI Requirement Extraction | LLM | ✅ Complete |
+| Semantic Similarity | Vector Embeddings | ✅ Complete |
+| Auto ID Generation | Structured Format | ✅ Complete |
+| Version Management | Snapshot-based | ✅ Complete |
+| Change History | Event Sourcing | ✅ Complete |
+| Multi-tenancy | Product Groups | ✅ Complete |
+| Duplicate Detection | Cosine Similarity | ✅ Complete |
 
 ---
 
@@ -248,37 +288,55 @@ graph TB
 
 ### Prerequisites
 - Python 3.9+
-- Ollama (local LLM)
-- Node.js 18+ (frontend)
+- Node.js 18+
+- LLM API Access (OpenAI Compatible)
 
-### Backend Setup
+### Quick Start
+
 ```bash
+# 1. Clone Repository
+git clone https://github.com/Vegitime-bot/Requirement_management.git
+cd Requirement_management
+
+# 2. Setup Backend
 cd backend
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# .env 파일 생성
-cat > .env << EOF
-LLM_API_URL=http://localhost:11434/v1
-LLM_MODEL=kimi-k2.5:cloud
-EMBEDDING_API_URL=http://localhost:11434
-EMBEDDING_MODEL=bge-m3
-EOF
+# 3. Configure Environment
+cp .env.example .env
+# Edit .env with your LLM API settings
 
-# Ollama 모델 다운로드
-ollama pull kimi-k2.5:cloud
-ollama pull bge-m3
-
-# 서버 실행
+# 4. Run Backend
 python app.py
-```
 
-### Frontend Setup
-```bash
-cd frontend
+# 5. Setup Frontend (New Terminal)
+cd ../frontend
 npm install
 npm run dev
+
+# 6. Open Browser
+# http://localhost:3000
+```
+
+---
+
+## 📁 Project Structure
+
+```
+requirements-management-system/
+├── backend/
+│   ├── app.py                 # FastAPI application
+│   ├── services/
+│   │   ├── llm.py            # LLM integration
+│   │   └── embedding.py      # Embedding service
+│   └── tests/                # Test suite
+├── frontend/
+│   ├── app/                  # Next.js pages
+│   └── components/           # React components
+├── docs/                     # Documentation
+└── README.md                 # This file
 ```
 
 ---
@@ -288,40 +346,23 @@ npm run dev
 ```mermaid
 timeline
     title RMS Roadmap
-    2026-Q2 : POC 완성
-            : SQLite + Ollama
-            : 기본 Context Ingestion
-    2026-Q3 : 프로덕션 준비
-            : PostgreSQL 마이그레이션
-            : 실시간 협업 (WebSocket)
-            : 고급 필터/검색
-    2026-Q4 : 엔터프라이즈 기능
-            : SSO 통합
-            : 권한 관리 (RBAC)
-            : 외부 시스템 연동 (Jira, Confluence)
+    2026-Q2 : MVP Complete
+            : Core Features
+    2026-Q3 : Production Ready
+            : Advanced Filters
+            : Collaboration Features
+    2026-Q4 : Enterprise Features
+            : SSO Integration
+            : External System Connectors
 ```
 
 ---
 
-## 🏆 Key Achievements
-
-| 기능 | 기술 | 상태 |
-|------|------|------|
-| AI 요구사항 추출 | Kimi-k2.5 | ✅ 완료 |
-| 의미적 유사도 | BGE-M3 | ✅ 완료 |
-| 자동 ID 생성 | {Product}-{Var}-{Cat}-{Seq} | ✅ 완료 |
-| 버전 관리 | Snapshot 기반 | ✅ 완료 |
-| 변경 이력 | Actions 테이블 | ✅ 완료 |
-| 멀티 테넌트 | Product Groups | ✅ 완료 |
-
----
-
-## 📞 Contact
+## 📞 Links
 
 - **Repository:** https://github.com/Vegitime-bot/Requirement_management
-- **Tech Stack:** FastAPI, Next.js, SQLModel, Ollama
-- **License:** MIT
+- **Documentation:** See `docs/` directory
 
 ---
 
-*Built with ❤️ by Vegitime-bot*
+*Built with ❤️ for better requirement management*

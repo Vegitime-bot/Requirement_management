@@ -4,25 +4,25 @@
 
 ```mermaid
 graph TB
-    subgraph Client["🖥️ Client Layer"]
-        Web["Next.js Web App"]
+    subgraph Client["Client Layer"]
+        Web["Web Application"]
         Mobile["Mobile (Future)"]
     end
 
-    subgraph Gateway["🌐 API Gateway"]
+    subgraph Gateway["API Gateway"]
         FastAPI["FastAPI Server"]
         CORS["CORS Middleware"]
-        Auth["Mock Auth (Dev)"]
+        Auth["Authentication"]
     end
 
-    subgraph Core["⚙️ Core Services"]
-        subgraph Ingestion["📥 Context Ingestion"]
-            LLM["LLM Service<br/>Kimi-k2.5"]
-            Embed["Embedding Service<br/>BGE-M3"]
+    subgraph Core["Core Services"]
+        subgraph Ingestion["Context Ingestion"]
+            LLM["LLM Service"]
+            Embed["Embedding Service"]
             Matcher["Similarity Matcher"]
         end
 
-        subgraph Domain["📋 Domain Logic"]
+        subgraph Domain["Domain Logic"]
             Product["Product Manager"]
             Req["Requirement Manager"]
             Version["Version Manager"]
@@ -30,19 +30,18 @@ graph TB
         end
     end
 
-    subgraph Data["💾 Data Layer"]
-        SQLite[(SQLite<br/>rms.db)]
-        LocalFiles[".env config"]
+    subgraph Data["Data Layer"]
+        DB[(Relational Database)]
     end
 
-    Client --"HTTP/REST"--> Gateway
-    Gateway --"Routes"--> Core
-    Ingestion --"Save"--> Domain
-    Domain --"CRUD"--> Data
+    Client --> Gateway
+    Gateway --> Core
+    Ingestion --> Domain
+    Domain --> Data
 
     style LLM fill:#FF6B6B,stroke:#333
     style Embed fill:#4ECDC4,stroke:#333
-    style SQLite fill:#96CEB4,stroke:#333
+    style DB fill:#96CEB4,stroke:#333
 ```
 
 ## Database Schema
@@ -165,17 +164,17 @@ erDiagram
 
 ```mermaid
 flowchart LR
-    A["📄 Raw Text<br/>Email/Spec/Doc"] --> B["🤖 LLM Extraction"]
-    B --> C{"✅ Is Product<br/>Requirement?"}
-    C -->|Yes| D["📊 Embedding<br/>Vectorization"]
-    C -->|No| E["🗑️ Filter Out"]
-    D --> F["🔍 Similarity Search"]
-    F --> G{"🤔 Match Found?"}
-    G -->|Yes| H["📝 Suggest UPDATE"]
-    G -->|No| I["📝 Suggest CREATE"]
-    H --> J["👤 Human Review"]
+    A["Raw Text"] --> B["LLM Extraction"]
+    B --> C{"Is Product Requirement?"}
+    C -->|Yes| D["Embedding Vectorization"]
+    C -->|No| E["Filter Out"]
+    D --> F["Similarity Search"]
+    F --> G{"Match Found?"}
+    G -->|Yes| H["Suggest UPDATE"]
+    G -->|No| I["Suggest CREATE"]
+    H --> J["Human Review"]
     I --> J
-    J --> K["💾 Apply Changes"]
+    J --> K["Apply Changes"]
 
     style B fill:#FF6B6B,stroke:#333
     style D fill:#4ECDC4,stroke:#333
@@ -226,82 +225,52 @@ stateDiagram-v2
     }
 ```
 
-## Request Lifecycle
+## Technology Stack
 
-```mermaid
-journey
-    title Context Ingestion User Journey
-    section Upload
-      Upload document: 5: User
-      Wait for analysis: 3: User
-    section Review
-      View extracted requirements: 5: User
-      Review suggestions: 4: User
-      Select actions: 4: User
-    section Apply
-      Confirm application: 5: User
-      View generated IDs: 5: User
-      Create version: 3: User
-```
-
-## Technology Decisions
-
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| **Database (POC)** | SQLite | Zero config, portable, file-based |
-| **Database (Prod)** | PostgreSQL | Scalable, concurrent access |
-| **ORM** | SQLModel | Type-safe, FastAPI native |
-| **LLM** | Kimi-k2.5 | Korean/English bilingual, Ollama compatible |
-| **Embedding** | BGE-M3 | Multilingual, SOTA performance |
-| **API Framework** | FastAPI | Async native, auto OpenAPI docs |
-| **Frontend** | Next.js 14 + shadcn/ui | Modern, accessible, rapid development |
-| **Network** | Tailscale | Secure remote access, zero config VPN |
+| Layer | Technology | Rationale |
+|-------|------------|-----------|
+| **Backend** | FastAPI + SQLModel | Type-safe, async-native, OpenAPI docs |
+| **Database** | PostgreSQL | ACID compliant, scalable |
+| **ORM** | SQLModel | Pydantic + SQLAlchemy integration |
+| **LLM** | OpenAI Compatible API | Flexible provider selection |
+| **Embedding** | Vector Embeddings | Semantic similarity search |
+| **Frontend** | Next.js + React | SSR, modern DX |
+| **Styling** | Tailwind CSS | Utility-first, rapid development |
 
 ## Security Considerations
 
 ```mermaid
 flowchart TB
-    subgraph Security["🔒 Security Layers"]
-        A["Network: Tailscale<br/>mTLS + WireGuard"]
+    subgraph Security["Security Layers"]
+        A["Network: TLS/HTTPS"]
         B["API: CORS + Auth"]
-        C["Data: Input Validation<br/>SQL Injection Prevention"]
-        D["Config: .env files<br/>Never commit secrets"]
+        C["Data: Input Validation"]
+        D["Config: Environment Variables"]
     end
 
-    Security --> E["🛡️ Protected System"]
+    Security --> E["Protected System"]
 
     style E fill:#96CEB4,stroke:#333
 ```
-
-## Performance Characteristics
-
-| Operation | Latency | Notes |
-|-----------|---------|-------|
-| LLM Extraction | 2-5s | Depends on context length |
-| Embedding Generation | 100-300ms | Per text chunk |
-| Similarity Search | 50-100ms | In-memory cache |
-| Database Query | 10-50ms | SQLite, indexed |
-| API Response | 3-6s | Total pipeline |
 
 ## Scaling Strategy
 
 ```mermaid
 graph LR
-    subgraph Current["Current (POC)"]
-        A1["Single Process"]
-        B1["SQLite File"]
-        C1["Local Ollama"]
+    subgraph Current["Current"]
+        A1["Application Server"]
+        B1["Database"]
+        C1["LLM API"]
     end
 
-    subgraph Future["Future (Production)"]
-        A2["Gunicorn Workers"]
-        B2["PostgreSQL Cluster"]
-        C2["Dedicated LLM Service"]
-        D2["Redis Cache"]
-        E2["Load Balancer"]
+    subgraph Future["Future"]
+        A2["Load Balancer"]
+        B2["App Cluster"]
+        C2["Read Replicas"]
+        D2["Cache Layer"]
     end
 
-    Current --"Horizontal Scale"--> Future
+    Current --"Scale Horizontally"--> Future
 
     style Current fill:#FFE66D,stroke:#333
     style Future fill:#96CEB4,stroke:#333
