@@ -30,4 +30,5 @@ Thumbs.db
 backend/rms.db
 backend/*.log
 backend/venv/
+backend/.env
 frontend/frontend.log

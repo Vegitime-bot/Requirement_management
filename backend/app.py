@@ -6,10 +6,19 @@ from pydantic import BaseModel
 from datetime import datetime
 from contextlib import contextmanager
 import uuid
+import os
+
+# Load environment variables from .env file FIRST
+from dotenv import load_dotenv
+load_dotenv()
 
 from sqlmodel import SQLModel, Session, create_engine, select, Field, Column
 from sqlalchemy import String, Text, Boolean, Float, ForeignKey, JSON
 from sqlalchemy.dialects.sqlite import TIMESTAMP
+
+# Now import services (after env vars loaded)
+from services.llm import llm_service, ExtractedRequirement
+from services.embedding import embedding_service
 
 # Database setup - SQLite for POC
 DATABASE_URL = "sqlite:///./rms.db"
@@ -68,6 +77,7 @@ class Product(SQLModel, table=True):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
     group_id: str = Field(foreign_key="product_groups.id")
     name: str
+    code: str = Field(default="", sa_column=Column(String(20), unique=True))  # e.g., "VR51", "PROJ-A"
     description: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -76,6 +86,7 @@ class ProductVariant(SQLModel, table=True):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
     product_id: str = Field(foreign_key="products.id")
     name: str
+    code: str = Field(default="", sa_column=Column(String(10)))  # e.g., "STD", "PRO", "ENT"
     description: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -84,6 +95,7 @@ class Category(SQLModel, table=True):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
     product_id: str = Field(foreign_key="products.id")
     name: str
+    code: str = Field(default="", sa_column=Column(String(10)))  # e.g., "CORE", "SEC", "PERF"
     description: Optional[str] = None
     created_by: Optional[str] = Field(default=None, foreign_key="users.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -91,6 +103,7 @@ class Category(SQLModel, table=True):
 class Requirement(SQLModel, table=True):
     __tablename__ = "requirements"
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
+    req_id: str = Field(default="", sa_column=Column(String(50), unique=True))  # Human-readable ID: "VR51-STD-CORE-0001"
     product_id: str = Field(foreign_key="products.id")
     category_id: Optional[str] = Field(default=None, foreign_key="categories.id")
     variant_id: Optional[str] = Field(default=None, foreign_key="product_variants.id")
@@ -111,6 +124,29 @@ class RequirementAction(SQLModel, table=True):
     new_value: Optional[str] = None
     performed_by: Optional[str] = Field(default=None, foreign_key="users.id")
     performed_at: datetime = Field(default_factory=datetime.utcnow)
+
+class RequirementVersion(SQLModel, table=True):
+    """Snapshot of all requirements at a specific point in time."""
+    __tablename__ = "requirement_versions"
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
+    product_id: str = Field(foreign_key="products.id")
+    version_name: str  # e.g., "v1.0", "Q2 Release"
+    description: Optional[str] = None
+    created_by: Optional[str] = Field(default=None, foreign_key="users.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class RequirementVersionItem(SQLModel, table=True):
+    """Individual requirements within a version snapshot."""
+    __tablename__ = "requirement_version_items"
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
+    version_id: str = Field(foreign_key="requirement_versions.id")
+    requirement_id: str = Field(foreign_key="requirements.id")
+    title: str
+    description: Optional[str] = None
+    status: str
+    priority: str
+    category_id: Optional[str] = None
+    variant_id: Optional[str] = None
 
 # CRUD Functions - User
 def create_user(session: Session, email: str, name: str) -> User:
@@ -185,8 +221,8 @@ def approve_membership(session: Session, membership_id: str, approved_by: str) -
     return membership
 
 # CRUD Functions - Product
-def create_product(session: Session, group_id: str, name: str, description: Optional[str]) -> Product:
-    product = Product(group_id=group_id, name=name, description=description)
+def create_product(session: Session, group_id: str, name: str, code: str, description: Optional[str]) -> Product:
+    product = Product(group_id=group_id, name=name, code=code, description=description)
     session.add(product)
     session.commit()
     session.refresh(product)
@@ -200,12 +236,14 @@ def list_group_products(session: Session, group_id: str) -> List[Product]:
         select(Product).where(Product.group_id == group_id)
     ).all()
 
-def update_product(session: Session, product_id: str, name: Optional[str] = None, description: Optional[str] = None) -> Optional[Product]:
+def update_product(session: Session, product_id: str, name: Optional[str] = None, code: Optional[str] = None, description: Optional[str] = None) -> Optional[Product]:
     product = session.get(Product, product_id)
     if not product:
         return None
     if name is not None:
         product.name = name
+    if code is not None:
+        product.code = code
     if description is not None:
         product.description = description
     session.add(product)
@@ -222,8 +260,8 @@ def delete_product(session: Session, product_id: str) -> bool:
     return True
 
 # CRUD Functions - Product Variant
-def create_variant(session: Session, product_id: str, name: str, description: Optional[str]) -> ProductVariant:
-    variant = ProductVariant(product_id=product_id, name=name, description=description)
+def create_variant(session: Session, product_id: str, name: str, code: str, description: Optional[str]) -> ProductVariant:
+    variant = ProductVariant(product_id=product_id, name=name, code=code, description=description)
     session.add(variant)
     session.commit()
     session.refresh(variant)
@@ -237,12 +275,14 @@ def list_product_variants(session: Session, product_id: str) -> List[ProductVari
         select(ProductVariant).where(ProductVariant.product_id == product_id)
     ).all()
 
-def update_variant(session: Session, variant_id: str, name: Optional[str] = None, description: Optional[str] = None) -> Optional[ProductVariant]:
+def update_variant(session: Session, variant_id: str, name: Optional[str] = None, code: Optional[str] = None, description: Optional[str] = None) -> Optional[ProductVariant]:
     variant = session.get(ProductVariant, variant_id)
     if not variant:
         return None
     if name is not None:
         variant.name = name
+    if code is not None:
+        variant.code = code
     if description is not None:
         variant.description = description
     session.add(variant)
@@ -259,8 +299,8 @@ def delete_variant(session: Session, variant_id: str) -> bool:
     return True
 
 # CRUD Functions - Category
-def create_category(session: Session, product_id: str, name: str, description: Optional[str], created_by: str) -> Category:
-    category = Category(product_id=product_id, name=name, description=description, created_by=created_by)
+def create_category(session: Session, product_id: str, name: str, code: str, description: Optional[str], created_by: str) -> Category:
+    category = Category(product_id=product_id, name=name, code=code, description=description, created_by=created_by)
     session.add(category)
     session.commit()
     session.refresh(category)
@@ -274,12 +314,14 @@ def list_product_categories(session: Session, product_id: str) -> List[Category]
         select(Category).where(Category.product_id == product_id)
     ).all()
 
-def update_category(session: Session, category_id: str, name: Optional[str] = None, description: Optional[str] = None) -> Optional[Category]:
+def update_category(session: Session, category_id: str, name: Optional[str] = None, code: Optional[str] = None, description: Optional[str] = None) -> Optional[Category]:
     category = session.get(Category, category_id)
     if not category:
         return None
     if name is not None:
         category.name = name
+    if code is not None:
+        category.code = code
     if description is not None:
         category.description = description
     session.add(category)
@@ -516,16 +558,19 @@ products_router = APIRouter(prefix="/products", tags=["products"])
 class ProductCreate(BaseModel):
     group_id: str
     name: str
+    code: str = ""  # e.g., "VR51", "PROJ-A"
     description: Optional[str] = None
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
+    code: Optional[str] = None
     description: Optional[str] = None
 
 class ProductResponse(BaseModel):
     id: str
     group_id: str
     name: str
+    code: str
     description: Optional[str] = None
     created_at: datetime
     
@@ -596,7 +641,7 @@ def create_new_product(
     if existing:
         raise HTTPException(status_code=400, detail=f"Product '{product.name}' already exists in this group")
     
-    return create_product(db, product.group_id, product.name, product.description)
+    return create_product(db, product.group_id, product.name, product.code, product.description)
 
 @products_router.get("/{product_id}", response_model=ProductDetailResponse)
 def get_product_detail(
@@ -694,16 +739,19 @@ variants_router = APIRouter(prefix="/products/{product_id}/variants", tags=["var
 
 class VariantCreate(BaseModel):
     name: str
+    code: str = ""  # e.g., "STD", "PRO", "ENT"
     description: Optional[str] = None
 
 class VariantUpdate(BaseModel):
     name: Optional[str] = None
+    code: Optional[str] = None
     description: Optional[str] = None
 
 class VariantResponse(BaseModel):
     id: str
     product_id: str
     name: str
+    code: str
     description: Optional[str] = None
     created_at: datetime
     
@@ -757,7 +805,7 @@ def create_new_variant(
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
     
-    return create_variant(db, product_id, variant.name, variant.description)
+    return create_variant(db, product_id, variant.name, variant.code, variant.description)
 
 @variants_router.get("/{variant_id}", response_model=VariantResponse)
 def get_variant_detail(
@@ -817,7 +865,7 @@ def update_variant_endpoint(
     if not variant or variant.product_id != product_id:
         raise HTTPException(status_code=404, detail="Variant not found")
     
-    updated = update_variant(db, variant_id, update.name, update.description)
+    updated = update_variant(db, variant_id, update.name, update.code, update.description)
     return updated
 
 @variants_router.delete("/{variant_id}")
@@ -859,16 +907,19 @@ categories_router = APIRouter(prefix="/products/{product_id}/categories", tags=[
 
 class CategoryCreate(BaseModel):
     name: str
+    code: str = ""  # e.g., "CORE", "SEC", "PERF"
     description: Optional[str] = None
 
 class CategoryUpdate(BaseModel):
     name: Optional[str] = None
+    code: Optional[str] = None
     description: Optional[str] = None
 
 class CategoryResponse(BaseModel):
     id: str
     product_id: str
     name: str
+    code: str
     description: Optional[str] = None
     created_by: Optional[str]
     created_at: datetime
@@ -923,7 +974,7 @@ def create_new_category(
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
     
-    return create_category(db, product_id, category.name, category.description, current_user.id)
+    return create_category(db, product_id, category.name, category.code, category.description, current_user.id)
 
 @categories_router.get("/{category_id}", response_model=CategoryResponse)
 def get_category_detail(
@@ -983,7 +1034,7 @@ def update_category_endpoint(
     if not category or category.product_id != product_id:
         raise HTTPException(status_code=404, detail="Category not found")
     
-    updated = update_category(db, category_id, update.name, update.description)
+    updated = update_category(db, category_id, update.name, update.code, update.description)
     return updated
 
 @categories_router.delete("/{category_id}")
@@ -1021,6 +1072,45 @@ def delete_category_endpoint(
     return {"message": "Category deleted"}
 
 # Requirements CRUD Functions
+def generate_req_id(session: Session, product_id: str, variant_id: Optional[str], category_id: Optional[str]) -> str:
+    """Generate human-readable requirement ID: {ProductCode}-{VariantCode}-{CategoryCode}-{Seq:04d}"""
+    # Get product code
+    product = session.get(Product, product_id)
+    product_code = product.code if product and product.code else "PROD"
+    
+    # Get variant code
+    variant_code = "GEN"  # Generic/Default
+    if variant_id:
+        variant = session.get(ProductVariant, variant_id)
+        if variant and variant.code:
+            variant_code = variant.code
+    
+    # Get category code
+    category_code = "GEN"  # Generic/Default
+    if category_id:
+        category = session.get(Category, category_id)
+        if category and category.code:
+            category_code = category.code
+    
+    # Find next sequence number for this combination
+    prefix = f"{product_code}-{variant_code}-{category_code}-"
+    existing = session.exec(
+        select(Requirement).where(Requirement.req_id.like(f"{prefix}%"))
+    ).all()
+    
+    max_seq = 0
+    for req in existing:
+        try:
+            seq_part = req.req_id.split("-")[-1]
+            seq_num = int(seq_part)
+            if seq_num > max_seq:
+                max_seq = seq_num
+        except:
+            pass
+    
+    next_seq = max_seq + 1
+    return f"{prefix}{next_seq:04d}"
+
 def create_requirement(
     session: Session,
     product_id: str,
@@ -1040,6 +1130,12 @@ def create_requirement(
         priority=priority,
         created_by=created_by
     )
+    session.add(req)
+    session.commit()
+    session.refresh(req)
+    
+    # Generate and set human-readable req_id
+    req.req_id = generate_req_id(session, product_id, variant_id, category_id)
     session.add(req)
     session.commit()
     session.refresh(req)
@@ -1174,6 +1270,7 @@ class RequirementUpdate(BaseModel):
 
 class RequirementResponse(BaseModel):
     id: str
+    req_id: str  # Human-readable ID
     product_id: str
     category_id: Optional[str]
     variant_id: Optional[str]
@@ -1383,6 +1480,11 @@ def get_requirement_actions_endpoint(
     
     return get_requirement_actions(db, req_id)
 
+import httpx
+
+# Context Ingestion Router
+load_dotenv()
+
 # Context Ingestion Router
 ingest_router = APIRouter(prefix="/ingest", tags=["ingest"])
 
@@ -1391,7 +1493,7 @@ class IngestRequest(BaseModel):
     context_text: str
     source_type: str = "email"  # email, spec, document, meeting_notes
 
-class ExtractedRequirement(BaseModel):
+class ExtractedRequirementResponse(BaseModel):
     title: str
     description: str
     priority: str = "medium"
@@ -1400,105 +1502,51 @@ class ExtractedRequirement(BaseModel):
     reason: str
 
 class IngestResponse(BaseModel):
-    extracted: List[ExtractedRequirement]
+    extracted: List[ExtractedRequirementResponse]
     existing_requirements: List[RequirementResponse]
     suggestions: List[dict]
 
 class ApplyIngestRequest(BaseModel):
     product_id: str
-    extracted_requirements: List[ExtractedRequirement]
+    extracted_requirements: List[ExtractedRequirementResponse]
     actions: List[dict]  # [{"type": "create"|"update", "extracted_index": int, "existing_id": str|null}]
 
 @ingest_router.post("/analyze", response_model=IngestResponse)
-def analyze_context(
+async def analyze_context(
     request: IngestRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Analyze raw context and extract requirements."""
+    """Analyze raw context and extract requirements using LLM."""
     product = get_product(db, request.product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     
-    # Check access
-    membership = db.exec(
-        select(ProductMembership).where(
-            ProductMembership.group_id == product.group_id,
-            ProductMembership.user_id == current_user.id,
-            ProductMembership.status == "approved"
-        )
-    ).first()
-    
-    if not membership:
-        raise HTTPException(status_code=403, detail="Not a member of this group")
-    
-    # TODO: Replace with actual LLM call
-    # Mock LLM analysis
-    extracted = mock_llm_analysis(request.context_text)
+    # Call LLM for extraction
+    extracted = await llm_service.extract_requirements(request.context_text, request.source_type)
     
     # Get existing requirements for comparison
     existing = list_requirements(db, request.product_id)
     
     # Generate suggestions
-    suggestions = generate_ingest_suggestions(extracted, existing)
+    suggestions = await generate_ingest_suggestions(extracted, existing, db)
     
     return {
-        "extracted": extracted,
+        "extracted": [e.model_dump() for e in extracted],
         "existing_requirements": existing,
         "suggestions": suggestions
     }
 
-def mock_llm_analysis(context_text: str) -> List[ExtractedRequirement]:
-    """Mock LLM analysis - replace with actual LLM call."""
-    # Simple keyword-based extraction for demo
-    extracted = []
-    
-    lines = context_text.split('\n')
-    for i, line in enumerate(lines):
-        line = line.strip()
-        if not line:
-            continue
-            
-        # Detect if line looks like a requirement
-        is_req = any(kw in line.lower() for kw in [
-            'must', 'should', 'shall', 'need', 'requires', 
-            'support', 'provide', 'implement', 'enable',
-            '시스템은', '사용자는', '기능', '요구'
-        ])
-        
-        # Detect non-requirements (dates, requests, etc.)
-        is_non_req = any(kw in line.lower() for kw in [
-            'deadline', '납기', 'asap', 'please fix', 'plz', '수정해주세요',
-            'due date', 'by tomorrow', 'by next week', 'urgent request'
-        ])
-        
-        if is_req and not is_non_req and len(line) > 10:
-            extracted.append({
-                "title": line[:60] + ('...' if len(line) > 60 else ''),
-                "description": line,
-                "priority": "high" if any(kw in line.lower() for kw in ['critical', 'must', 'shall']) else "medium",
-                "confidence": 0.85,
-                "is_product_requirement": True,
-                "reason": "Contains requirement keywords"
-            })
-        elif is_non_req:
-            extracted.append({
-                "title": f"[Non-Requirement] {line[:40]}...",
-                "description": line,
-                "priority": "low",
-                "confidence": 0.9,
-                "is_product_requirement": False,
-                "reason": "Contains non-requirement indicators (deadline, request, etc.)"
-            })
-    
-    return extracted
-
-def generate_ingest_suggestions(
+async def generate_ingest_suggestions(
     extracted: List[ExtractedRequirement],
-    existing: List[Requirement]
+    existing: List[Requirement],
+    db: Session
 ) -> List[dict]:
-    """Generate suggestions for matching extracted to existing."""
+    """Generate suggestions using embedding-based similarity."""
     suggestions = []
+    
+    # Prepare existing requirements for comparison
+    existing_reqs = [(req.id, f"{req.title} {req.description or ''}") for req in existing]
     
     for i, ext in enumerate(extracted):
         if not ext.is_product_requirement:
@@ -1509,40 +1557,37 @@ def generate_ingest_suggestions(
                 "existing_id": None
             })
             continue
-            
-        # Simple similarity check (replace with embedding-based similarity)
-        best_match = None
-        best_score = 0
-        for req in existing:
-            # Simple word overlap similarity
-            ext_words = set(ext.title.lower().split())
-            req_words = set(req.title.lower().split())
-            if ext_words and req_words:
-                overlap = len(ext_words & req_words) / len(ext_words | req_words)
-                if overlap > best_score and overlap > 0.3:
-                    best_score = overlap
-                    best_match = req
         
-        if best_match:
-            suggestions.append({
-                "extracted_index": i,
-                "action": "update",
-                "reason": f"Similar to existing: '{best_match.title[:40]}...'",
-                "existing_id": best_match.id,
-                "similarity": round(best_score, 2)
-            })
-        else:
-            suggestions.append({
-                "extracted_index": i,
-                "action": "create",
-                "reason": "New requirement",
-                "existing_id": None
-            })
+        # Use embedding-based similarity
+        ext_text = f"{ext.title} {ext.description}"
+        similar = await embedding_service.find_similar_requirements(
+            ext_text, existing_reqs, threshold=0.75
+        )
+        
+        if similar:
+            best_match_id, best_score = similar[0]
+            best_req = next((r for r in existing if r.id == best_match_id), None)
+            if best_req:
+                suggestions.append({
+                    "extracted_index": i,
+                    "action": "update",
+                    "reason": f"Similar to existing: '{best_req.title[:40]}...'",
+                    "existing_id": best_match_id,
+                    "similarity": round(best_score, 2)
+                })
+                continue
+        
+        suggestions.append({
+            "extracted_index": i,
+            "action": "create",
+            "reason": "New requirement",
+            "existing_id": None
+        })
     
     return suggestions
 
 @ingest_router.post("/apply")
-def apply_ingest(
+async def apply_ingest(
     request: ApplyIngestRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -1596,6 +1641,226 @@ def apply_ingest(
     
     return {"results": results, "applied_count": len([r for r in results if r["action"] != "skip"])}
 
+# Versions Router
+versions_router = APIRouter(prefix="/products/{product_id}/versions", tags=["versions"])
+
+class VersionCreate(BaseModel):
+    version_name: str
+    description: Optional[str] = None
+
+class VersionResponse(BaseModel):
+    id: str
+    product_id: str
+    version_name: str
+    description: Optional[str]
+    created_by: Optional[str]
+    created_at: datetime
+    item_count: int
+    
+    class Config:
+        from_attributes = True
+
+class VersionItemResponse(BaseModel):
+    id: str
+    requirement_id: str
+    title: str
+    description: Optional[str]
+    status: str
+    priority: str
+    category_id: Optional[str]
+    variant_id: Optional[str]
+    
+    class Config:
+        from_attributes = True
+
+class VersionDetailResponse(BaseModel):
+    version: VersionResponse
+    items: List[VersionItemResponse]
+
+@versions_router.get("/", response_model=List[VersionResponse])
+def list_versions(
+    product_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """List all versions for a product."""
+    product = get_product(db, product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    # Check access
+    membership = db.exec(
+        select(ProductMembership).where(
+            ProductMembership.group_id == product.group_id,
+            ProductMembership.user_id == current_user.id,
+            ProductMembership.status == "approved"
+        )
+    ).first()
+    
+    if not membership:
+        raise HTTPException(status_code=403, detail="Not a member of this group")
+    
+    versions = db.exec(
+        select(RequirementVersion).where(
+            RequirementVersion.product_id == product_id
+        ).order_by(RequirementVersion.created_at.desc())
+    ).all()
+    
+    # Add item count
+    result = []
+    for v in versions:
+        count = db.exec(
+            select(RequirementVersionItem).where(
+                RequirementVersionItem.version_id == v.id
+            )
+        ).all()
+        result.append({
+            **v.model_dump(),
+            "item_count": len(count)
+        })
+    
+    return result
+
+@versions_router.post("/", response_model=VersionResponse)
+def create_version(
+    product_id: str,
+    version: VersionCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Create a new version snapshot of all current requirements."""
+    product = get_product(db, product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    # Check access
+    membership = db.exec(
+        select(ProductMembership).where(
+            ProductMembership.group_id == product.group_id,
+            ProductMembership.user_id == current_user.id,
+            ProductMembership.status == "approved"
+        )
+    ).first()
+    
+    if not membership:
+        raise HTTPException(status_code=403, detail="Not a member of this group")
+    
+    # Create version
+    new_version = RequirementVersion(
+        product_id=product_id,
+        version_name=version.version_name,
+        description=version.description,
+        created_by=current_user.id
+    )
+    db.add(new_version)
+    db.commit()
+    db.refresh(new_version)
+    
+    # Snapshot all current requirements
+    requirements = list_requirements(db, product_id)
+    for req in requirements:
+        item = RequirementVersionItem(
+            version_id=new_version.id,
+            requirement_id=req.id,
+            title=req.title,
+            description=req.description,
+            status=req.status,
+            priority=req.priority,
+            category_id=req.category_id,
+            variant_id=req.variant_id
+        )
+        db.add(item)
+    
+    db.commit()
+    
+    return {
+        **new_version.model_dump(),
+        "item_count": len(requirements)
+    }
+
+@versions_router.get("/{version_id}", response_model=VersionDetailResponse)
+def get_version_detail(
+    product_id: str,
+    version_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get version details with all items."""
+    product = get_product(db, product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    # Check access
+    membership = db.exec(
+        select(ProductMembership).where(
+            ProductMembership.group_id == product.group_id,
+            ProductMembership.user_id == current_user.id,
+            ProductMembership.status == "approved"
+        )
+    ).first()
+    
+    if not membership:
+        raise HTTPException(status_code=403, detail="Not a member of this group")
+    
+    version = db.get(RequirementVersion, version_id)
+    if not version or version.product_id != product_id:
+        raise HTTPException(status_code=404, detail="Version not found")
+    
+    items = db.exec(
+        select(RequirementVersionItem).where(
+            RequirementVersionItem.version_id == version_id
+        )
+    ).all()
+    
+    return {
+        "version": {
+            **version.model_dump(),
+            "item_count": len(items)
+        },
+        "items": items
+    }
+
+@versions_router.delete("/{version_id}")
+def delete_version(
+    product_id: str,
+    version_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a version (admin only)."""
+    product = get_product(db, product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    # Check admin access
+    membership = db.exec(
+        select(ProductMembership).where(
+            ProductMembership.group_id == product.group_id,
+            ProductMembership.user_id == current_user.id,
+            ProductMembership.status == "approved",
+            ProductMembership.role.in_(["owner", "admin"])
+        )
+    ).first()
+    
+    if not membership:
+        raise HTTPException(status_code=403, detail="Only admins can delete versions")
+    
+    version = db.get(RequirementVersion, version_id)
+    if not version or version.product_id != product_id:
+        raise HTTPException(status_code=404, detail="Version not found")
+    
+    # Delete items first
+    db.exec(
+        select(RequirementVersionItem).where(
+            RequirementVersionItem.version_id == version_id
+        )
+    ).all()
+    
+    db.delete(version)
+    db.commit()
+    
+    return {"message": "Version deleted"}
+
 # Include routers
 app.include_router(auth_router)
 app.include_router(groups_router)
@@ -1604,6 +1869,7 @@ app.include_router(variants_router)
 app.include_router(categories_router)
 app.include_router(requirements_router)
 app.include_router(ingest_router)
+app.include_router(versions_router)
 
 # Create tables on startup
 @app.on_event("startup")
