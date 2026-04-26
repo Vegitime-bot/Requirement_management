@@ -1,0 +1,20 @@
+--- a/app.py
++++ b/app.py
+@@ -545,6 +545,16 @@ def create_new_product(
+     if not membership:
+         raise HTTPException(status_code=403, detail="Not a member of this group")
+     
++    # Check for duplicate product name in the same group
++    existing = db.exec(
++        select(Product).where(
++            Product.group_id == product.group_id,
++            Product.name == product.name
++        )
++    ).first()
++    
++    if existing:
++        raise HTTPException(status_code=400, detail=f"Product '{product.name}' already exists in this group")
++    
+     return create_product(db, product.group_id, product.name, product.description)
+ 
+ @products_router.get("/{product_id}", response_model=ProductDetailResponse)

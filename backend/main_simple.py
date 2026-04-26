@@ -1,21 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from sqlmodel import SQLModel, create_engine
-import os
 
+from .database import init_db
 from .routers import auth, product_groups, requirements
-
-# Database setup - SQLite for demo
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./rms.db")
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {})
-
-def create_tables():
-    SQLModel.metadata.create_all(engine)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    create_tables()
+    init_db()
     yield
 
 app = FastAPI(
@@ -34,11 +26,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routers
+# Include routers
 app.include_router(auth.router)
 app.include_router(product_groups.router)
 app.include_router(requirements.router)
 
+@app.get("/")
+def root():
+    return {
+        "service": "Requirements Management System",
+        "version": "0.1.0",
+        "status": "running",
+        "endpoints": {
+            "docs": "/docs",
+            "health": "/health",
+            "auth": "/auth/me",
+            "product_groups": "/product-groups",
+            "requirements": "/requirements"
+        }
+    }
+
 @app.get("/health")
 def health_check():
-    return {"status": "ok"}
+    return {"status": "ok", "version": "0.1.0"}

@@ -1,1 +1,6 @@
-> @tailwindcss/postcss@4.0.0-beta.6
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
