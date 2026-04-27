@@ -139,11 +139,9 @@ export default function Home() {
               <p className="text-muted-foreground">Manage your product groups</p>
             </div>
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Group
-                </Button>
+              <DialogTrigger render={<Button />}>
+                <Plus className="h-4 w-4 mr-2" />
+                New Group
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
@@ -152,8 +150,8 @@ export default function Home() {
                     Create a new product group to organize your products.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
+                <div className="space-y-5 py-4">
+                  <div className="space-y-3">
                     <Label htmlFor="name">Name *</Label>
                     <Input
                       id="name"
@@ -162,7 +160,7 @@ export default function Home() {
                       placeholder="Enter group name"
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <Label htmlFor="description">Description</Label>
                     <Input
                       id="description"
@@ -234,7 +232,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="border-t mt-auto">
         <div className="container mx-auto px-4 py-4 text-center text-sm text-muted-foreground">
-          Requirements Management System 2024
+          LSI Requirement Management System
         </div>
       </footer>
     </div>

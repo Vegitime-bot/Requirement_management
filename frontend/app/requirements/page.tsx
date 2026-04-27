@@ -28,7 +28,7 @@ interface Product {
   name: string;
 }
 
-const API_BASE_URL = "http://100.73.184.77:8010";
+const API_BASE_URL = "/api";
 
 export default function RequirementsPage() {
   const [requirements, setRequirements] = useState<Requirement[]>([]);
@@ -139,7 +139,7 @@ export default function RequirementsPage() {
                   className="pl-10"
                 />
               </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v || 'all')}>
                 <SelectTrigger className="w-[180px]">
                   <Filter className="h-4 w-4 mr-2" />
                   <SelectValue placeholder="Filter by status" />

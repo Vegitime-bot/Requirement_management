@@ -14,7 +14,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { ArrowLeft, FileText, History, Edit, Trash2, CheckCircle, Clock, User, Save, X } from "lucide-react";
 import Link from "next/link";
 
-const API_BASE_URL = "http://100.73.184.77:8010";
+const API_BASE_URL = "/api";
 
 interface Requirement {
   id: string;
@@ -241,11 +241,9 @@ export default function RequirementDetailPage() {
                   </Button>
                   
                   <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="sm">
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
-                      </Button>
+                    <AlertDialogTrigger render={<Button variant="destructive" size="sm" />}>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
@@ -319,7 +317,7 @@ export default function RequirementDetailPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Status</label>
-                      <Select value={editStatus} onValueChange={setEditStatus}>
+                      <Select value={editStatus} onValueChange={(v) => setEditStatus(v || 'draft')}>
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
@@ -334,7 +332,7 @@ export default function RequirementDetailPage() {
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Priority</label>
-                      <Select value={editPriority} onValueChange={setEditPriority}>
+                      <Select value={editPriority} onValueChange={(v) => setEditPriority(v || 'medium')}>
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
@@ -369,7 +367,7 @@ export default function RequirementDetailPage() {
                 {isEditing && categories.length > 0 && (
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Category</label>
-                    <Select value={editCategoryId} onValueChange={setEditCategoryId}>
+                    <Select value={editCategoryId} onValueChange={(v) => setEditCategoryId(v || '')}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>

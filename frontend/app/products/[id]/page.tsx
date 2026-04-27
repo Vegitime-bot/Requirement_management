@@ -52,7 +52,7 @@ interface Requirement {
   updated_at: string;
 }
 
-const API_BASE_URL = "http://100.73.184.77:8010";
+const API_BASE_URL = "/api";
 
 const statusColors: Record<string, string> = {
   draft: "bg-gray-500",
@@ -230,11 +230,9 @@ export default function ProductDetailPage() {
             
             {/* Delete Button */}
             <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete
-                </Button>
+              <AlertDialogTrigger render={<Button variant="destructive" size="sm" />}>
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
@@ -285,11 +283,9 @@ export default function ProductDetailPage() {
                 <p className="text-muted-foreground">Manage product variants (e.g., Standard, Pro, Enterprise)</p>
               </div>
               <Dialog open={variantDialogOpen} onOpenChange={setVariantDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    New Variant
-                  </Button>
+                <DialogTrigger render={<Button />}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Variant
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
@@ -365,11 +361,9 @@ export default function ProductDetailPage() {
                 <p className="text-muted-foreground">Organize requirements by category</p>
               </div>
               <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    New Category
-                  </Button>
+                <DialogTrigger render={<Button />}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Category
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>

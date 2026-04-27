@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { ArrowLeft, FileText, Sparkles, CheckCircle, AlertCircle, GitCompare } from "lucide-react";
 import Link from "next/link";
 
-const API_BASE_URL = "http://100.73.184.77:8010";
+const API_BASE_URL = "/api";
 
 interface ExtractedReq {
   title: string;
@@ -177,7 +177,7 @@ export default function IngestPage() {
                 <div className="flex gap-4">
                   <div className="flex-1">
                     <Label>Source Type</Label>
-                    <Select value={sourceType} onValueChange={setSourceType}>
+                    <Select value={sourceType} onValueChange={(v) => setSourceType(v || 'email')}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -270,7 +270,7 @@ export default function IngestPage() {
                               value={selectedActions[idx] || "skip"}
                               onValueChange={(v) => setSelectedActions({
                                 ...selectedActions,
-                                [idx]: v
+                                [idx]: v || 'skip'
                               })}
                             >
                               <SelectTrigger className={`w-32 text-white ${getActionColor(selectedActions[idx])}`}>

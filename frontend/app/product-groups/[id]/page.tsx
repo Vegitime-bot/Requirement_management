@@ -29,7 +29,7 @@ interface Product {
   created_at: string;
 }
 
-const API_BASE_URL = "http://100.73.184.77:8010";
+const API_BASE_URL = "/api";
 
 export default function ProductGroupDetailPage() {
   const params = useParams();
@@ -169,11 +169,9 @@ export default function ProductGroupDetailPage() {
                 <p className="text-muted-foreground">Manage products in this group</p>
               </div>
               <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    New Product
-                  </Button>
+                <DialogTrigger render={<Button />}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Product
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>

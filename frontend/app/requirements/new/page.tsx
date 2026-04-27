@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, FileText, Sparkles, CheckCircle, AlertCircle } from "lucide-react";
 import Link from "next/link";
 
-const API_BASE_URL = "http://100.73.184.77:8010";
+const API_BASE_URL = "/api";
 
 interface Product {
   id: string;
@@ -231,7 +231,7 @@ function NewRequirementForm() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Category</Label>
-                    <Select value={categoryId} onValueChange={setCategoryId}>
+                    <Select value={categoryId} onValueChange={(v) => setCategoryId(v || "")}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
@@ -248,7 +248,7 @@ function NewRequirementForm() {
 
                   <div className="space-y-2">
                     <Label>Variant</Label>
-                    <Select value={variantId} onValueChange={setVariantId}>
+                    <Select value={variantId} onValueChange={(v) => setVariantId(v || "")}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select variant" />
                       </SelectTrigger>
@@ -267,7 +267,7 @@ function NewRequirementForm() {
                 {/* Priority */}
                 <div className="space-y-2">
                   <Label>Priority</Label>
-                  <Select value={priority} onValueChange={setPriority}>
+                  <Select value={priority} onValueChange={(v) => setPriority(v || "medium")}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
