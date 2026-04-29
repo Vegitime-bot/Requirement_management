@@ -1,7 +1,7 @@
 import axios from "axios";
 
-// Use relative URL to leverage Next.js proxy (configured in next.config.js)
-const API_BASE_URL = "/api";
+// Use direct backend URL (localhost for same-machine access)
+const API_BASE_URL = "http://100.73.184.77:8020";
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

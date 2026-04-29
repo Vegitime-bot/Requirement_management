@@ -6,13 +6,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, FileText, Sparkles, CheckCircle, AlertCircle, GitCompare } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
+import { PageFooter } from "@/components/PageFooter";
 import Link from "next/link";
 
-const API_BASE_URL = "/api";
+const API_BASE_URL = "http://100.73.184.77:8020";
 
 interface ExtractedReq {
   title: string;
@@ -46,10 +47,19 @@ export default function IngestPage() {
   const [error, setError] = useState<string | null>(null);
 
   const handleAnalyze = async () => {
-    if (!contextText.trim() || !productId) return;
+    if (!contextText.trim()) {
+      setError("Please enter context text to analyze");
+      return;
+    }
+    if (!productId) {
+      setError("Product ID is missing. Please navigate from a product page.");
+      return;
+    }
 
     setStep("analyzing");
     setError(null);
+
+    console.log("[DEBUG] Sending request:", { productId, contextText, sourceType });
 
     try {
       const res = await fetch(`${API_BASE_URL}/ingest/analyze`, {
@@ -62,7 +72,20 @@ export default function IngestPage() {
         }),
       });
 
-      if (!res.ok) throw new Error("Analysis failed");
+      console.log("[DEBUG] Response status:", res.status);
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "Unknown error");
+        console.error("[DEBUG] Error response:", errText);
+        let errMsg = `Analysis failed (${res.status})`;
+        try {
+          const errData = JSON.parse(errText);
+          errMsg = errData.detail || errMsg;
+        } catch {
+          if (errText) errMsg += `: ${errText.substring(0, 200)}`;
+        }
+        throw new Error(errMsg);
+      }
 
       const data = await res.json();
       setExtracted(data.extracted);
@@ -115,10 +138,10 @@ export default function IngestPage() {
 
   const getActionColor = (action: string) => {
     switch (action) {
-      case "create": return "bg-green-500 hover:bg-green-600";
+      case "create": return "bg-emerald-500 hover:bg-emerald-600";
       case "update": return "bg-blue-500 hover:bg-blue-600";
-      case "skip": return "bg-gray-500 hover:bg-gray-600";
-      default: return "bg-gray-500";
+      case "skip": return "bg-slate-400 hover:bg-slate-500";
+      default: return "bg-slate-400";
     }
   };
 
@@ -131,76 +154,89 @@ export default function IngestPage() {
     }
   };
 
+  const getPriorityBadge = (priority: string) => {
+    const styles: Record<string, string> = {
+      high: "bg-red-50 text-red-700 border-red-200",
+      medium: "bg-blue-50 text-blue-700 border-blue-200",
+      low: "bg-slate-100 text-slate-700 border-slate-200",
+    };
+    return styles[priority] || styles.low;
+  };
+
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href={productId ? `/products/${productId}` : "/"}>
-                <Button variant="ghost" size="sm">
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back
-                </Button>
-              </Link>
-              <div>
-                <h1 className="text-2xl font-bold">Ingest Context</h1>
-                <p className="text-muted-foreground text-sm">
-                  Extract requirements from documents, emails, or specs
-                </p>
-              </div>
-            </div>
+    <div className="min-h-screen bg-slate-50/50 flex flex-col">
+      <PageHeader title="Ingest Context" subtitle="Extract requirements from documents, emails, or specs" />
 
-            {step === "review" && (
-              <Button onClick={handleApply} disabled={applying}>
-                <CheckCircle className="h-4 w-4 mr-2" />
-                {applying ? "Applying..." : "Apply Changes"}
-              </Button>
-            )}
-          </div>
+      {/* Sub Header */}
+      <div className="bg-white border-b border-slate-200/60">
+        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
+          <Link href={productId ? `/products/${productId}` : "/"}>
+            <Button variant="ghost" size="sm" className="text-slate-600 hover:text-indigo-600">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back
+            </Button>
+          </Link>
+
+          {step === "review" && (
+            <Button 
+              onClick={handleApply} 
+              disabled={applying}
+              className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-lg shadow-emerald-500/25"
+            >
+              <CheckCircle className="h-4 w-4 mr-2" />
+              {applying ? "Applying..." : "Apply Changes"}
+            </Button>
+          )}
         </div>
-      </header>
+      </div>
 
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-6 py-8 flex-1">
         {step === "input" && (
           <div className="max-w-3xl mx-auto space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Paste Context</CardTitle>
-                <CardDescription>
+            <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm p-6">
+              <div className="mb-6">
+                <h2 className="text-xl font-semibold text-slate-800 mb-2">Paste Context</h2>
+                <p className="text-slate-500">
                   Paste email, spec document, meeting notes, or any text containing requirements.
                   The AI will filter out non-requirements like deadlines, requests, etc.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex gap-4">
-                  <div className="flex-1">
-                    <Label>Source Type</Label>
-                    <Select value={sourceType} onValueChange={(v) => setSourceType(v || 'email')}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="email">Email</SelectItem>
-                        <SelectItem value="spec">Specification</SelectItem>
-                        <SelectItem value="meeting">Meeting Notes</SelectItem>
-                        <SelectItem value="document">Document</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-sm font-medium text-slate-700 mb-2 block">Source Type</Label>
+                  <Select value={sourceType} onValueChange={(v) => setSourceType(v || 'email')}>
+                    <SelectTrigger className="h-11 border-slate-200">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white">
+                      <SelectItem value="email">Email</SelectItem>
+                      <SelectItem value="spec">Specification</SelectItem>
+                      <SelectItem value="meeting">Meeting Notes</SelectItem>
+                      <SelectItem value="document">Document</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <Textarea
                   value={contextText}
                   onChange={(e) => setContextText(e.target.value)}
-                  placeholder={`Example:\n\nFrom: Product Manager\nSubject: New Features for Q2\n\nThe system must support user authentication via OAuth.\nWe also need to implement real-time notifications.\nPlease fix the login bug ASAP.\nDeadline: End of month.`}
+                  placeholder={`Example:
+
+From: Product Manager
+Subject: New Features for Q2
+
+The system must support user authentication via OAuth.
+We also need to implement real-time notifications.
+Please fix the login bug ASAP.
+Deadline: End of month.`}
                   rows={12}
+                  className="border-slate-200 focus:border-indigo-500 focus:ring-indigo-500"
                 />
 
                 {error && (
-                  <div className="flex items-center gap-2 text-red-500 text-sm">
+                  <div className="flex items-center gap-2 text-red-500 text-sm bg-red-50 p-3 rounded-lg">
                     <AlertCircle className="h-4 w-4" />
                     {error}
                   </div>
@@ -211,21 +247,24 @@ export default function IngestPage() {
                     onClick={handleAnalyze}
                     disabled={!contextText.trim() || !productId}
                     size="lg"
+                    className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/25"
                   >
                     <Sparkles className="h-4 w-4 mr-2" />
                     Analyze Context
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
         )}
 
         {step === "analyzing" && (
           <div className="max-w-md mx-auto text-center py-12">
-            <Sparkles className="h-16 w-16 mx-auto mb-4 text-primary animate-pulse" />
-            <h2 className="text-xl font-bold mb-2">Analyzing Context</h2>
-            <p className="text-muted-foreground">AI is extracting requirements and filtering non-requirements...⏎\n            </p>
+            <div className="w-20 h-20 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <Sparkles className="h-10 w-10 text-indigo-500 animate-pulse" />
+            </div>
+            <h2 className="text-xl font-bold text-slate-800 mb-2">Analyzing Context</h2>
+            <p className="text-slate-500">AI is extracting requirements and filtering non-requirements...</p>
           </div>
         )}
 
@@ -233,19 +272,17 @@ export default function IngestPage() {
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-semibold">Review Extracted Requirements</h2>
-                <p className="text-muted-foreground">
+                <h2 className="text-2xl font-bold text-slate-800">Review Extracted Requirements</h2>
+                <p className="text-slate-500 mt-1">
                   Review AI suggestions and select actions for each item.
                 </p>
               </div>
               <div className="flex gap-2">
-                <Badge variant="outline">
+                <Badge className="px-3 py-1.5 rounded-full text-sm font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60">
                   {extracted.filter((_, i) => selectedActions[i] !== "skip").length} to apply
                 </Badge>
               </div>
             </div>
-
-            <Separator />
 
             <div className="space-y-4">
               {extracted.map((req, idx) => {
@@ -255,14 +292,14 @@ export default function IngestPage() {
                 return (
                   <Card 
                     key={idx} 
-                    className={!isProductReq ? "opacity-60" : ""}
+                    className={`bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden ${!isProductReq ? "opacity-60" : ""}`}
                   >
                     <CardContent className="pt-6">
                       <div className="flex items-start gap-4">
                         {/* Checkbox for selection */}
-                        <div className="pt-1">
+                        <div className="pt-1 shrink-0">
                           {!isProductReq ? (
-                            <Badge variant="outline" className="text-gray-500">
+                            <Badge className="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200">
                               Skip
                             </Badge>
                           ) : (
@@ -273,10 +310,10 @@ export default function IngestPage() {
                                 [idx]: v || 'skip'
                               })}
                             >
-                              <SelectTrigger className={`w-32 text-white ${getActionColor(selectedActions[idx])}`}>
+                              <SelectTrigger className={`w-32 text-white border-0 ${getActionColor(selectedActions[idx])}`}>
                                 <SelectValue />
                               </SelectTrigger>
-                              <SelectContent>
+                              <SelectContent className="bg-white">
                                 <SelectItem value="create">➕ Create New</SelectItem>
                                 <SelectItem value="update">📝 Update Existing</SelectItem>
                                 <SelectItem value="skip">⏭️ Skip</SelectItem>
@@ -285,39 +322,37 @@ export default function IngestPage() {
                           )}
                         </div>
 
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           {/* Header */}
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="font-medium">{req.title}</span>
-                            <Badge 
-                              variant={req.priority === 'high' ? 'destructive' : 'secondary'}
-                            >
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            <span className="font-semibold text-slate-800">{req.title}</span>
+                            <Badge className={`px-2 py-0.5 rounded-full text-xs font-medium border ${getPriorityBadge(req.priority)}`}>
                               {req.priority}
                             </Badge>
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-xs text-slate-400">
                               {Math.round(req.confidence * 100)}% confidence
                             </span>
                           </div>
 
                           {/* Description */}
-                          <p className="text-sm text-muted-foreground mb-2">
+                          <p className="text-sm text-slate-600 mb-2">
                             {req.description}
                           </p>
 
                           {/* AI Reason */}
-                          <div className="flex items-center gap-2 text-xs">
-                            <Sparkles className="h-3 w-3 text-primary" />
-                            <span className="text-muted-foreground">{req.reason}</span>
+                          <div className="flex items-center gap-2 text-xs text-slate-500">
+                            <Sparkles className="h-3 w-3 text-indigo-500" />
+                            <span>{req.reason}</span>
                           </div>
 
                           {/* Suggestion reason */}
                           {suggestion && suggestion.action !== "skip" && (
-                            <div className="mt-2 p-2 bg-muted rounded text-sm">
+                            <div className="mt-3 p-3 bg-indigo-50 rounded-lg text-sm border border-indigo-100">
                               <div className="flex items-center gap-2">
-                                <GitCompare className="h-4 w-4 text-primary" />
-                                <span>{suggestion.reason}</span>
+                                <GitCompare className="h-4 w-4 text-indigo-500" />
+                                <span className="text-slate-700">{suggestion.reason}</span>
                                 {suggestion.similarity && (
-                                  <Badge variant="outline" className="text-xs">
+                                  <Badge className="ml-auto px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 border-0">
                                     {Math.round(suggestion.similarity * 100)}% match
                                   </Badge>
                                 )}
@@ -334,6 +369,8 @@ export default function IngestPage() {
           </div>
         )}
       </main>
+
+      <PageFooter />
     </div>
   );
 }

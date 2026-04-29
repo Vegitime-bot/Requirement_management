@@ -222,6 +222,9 @@ def approve_membership(session: Session, membership_id: str, approved_by: str) -
 
 # CRUD Functions - Product
 def create_product(session: Session, group_id: str, name: str, code: str, description: Optional[str]) -> Product:
+    # code가 비어있으면 자동으로 UUID 생성
+    if not code or code.strip() == "":
+        code = str(uuid.uuid4())[:8]  # 8자리 UUID 사용
     product = Product(group_id=group_id, name=name, code=code, description=description)
     session.add(product)
     session.commit()
@@ -355,7 +358,8 @@ app = FastAPI(
     title="Requirements Management System",
     description="API for managing product requirements",
     version="0.1.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    redirect_slashes=False
 )
 
 app.add_middleware(
@@ -1861,11 +1865,43 @@ def delete_version(
     
     return {"message": "Version deleted"}
 
+# Standalone variant endpoint (for /variants/{id})
+standalone_variants_router = APIRouter(prefix="/variants", tags=["variants"])
+
+@standalone_variants_router.get("/{variant_id}", response_model=VariantResponse)
+def get_variant_by_id(
+    variant_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    variant = get_variant(db, variant_id)
+    if not variant:
+        raise HTTPException(status_code=404, detail="Variant not found")
+    
+    product = get_product(db, variant.product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    # Check access
+    membership = db.exec(
+        select(ProductMembership).where(
+            ProductMembership.group_id == product.group_id,
+            ProductMembership.user_id == current_user.id,
+            ProductMembership.status == "approved"
+        )
+    ).first()
+    
+    if not membership:
+        raise HTTPException(status_code=403, detail="Not a member of this group")
+    
+    return variant
+
 # Include routers
 app.include_router(auth_router)
 app.include_router(groups_router)
 app.include_router(products_router)
 app.include_router(variants_router)
+app.include_router(standalone_variants_router)
 app.include_router(categories_router)
 app.include_router(requirements_router)
 app.include_router(ingest_router)
@@ -1898,4 +1934,4 @@ def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="100.73.184.77", port=8020)
+    uvicorn.run(app, host="0.0.0.0", port=8020)

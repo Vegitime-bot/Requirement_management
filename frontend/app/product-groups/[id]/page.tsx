@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Package, Plus, Users, Settings } from "lucide-react";
+import { ArrowLeft, Package, Plus, Users, Settings, ArrowRight } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
+import { PageFooter } from "@/components/PageFooter";
 import Link from "next/link";
 
 interface ProductGroup {
@@ -29,7 +30,7 @@ interface Product {
   created_at: string;
 }
 
-const API_BASE_URL = "/api";
+const API_BASE_URL = "http://100.73.184.77:8020";
 
 export default function ProductGroupDetailPage() {
   const params = useParams();
@@ -105,142 +106,162 @@ export default function ProductGroupDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-lg">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50/50">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-indigo-200 border-t-indigo-500 rounded-full animate-spin mx-auto mb-4"></div>
+        </div>
+        <div className="text-lg font-medium text-slate-700 ml-4">Loading...</div>
       </div>
     );
   }
 
   if (error || !group) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-red-500 mb-4">{error || "Group not found"}</div>
-          <Button onClick={() => router.push("/")}>Go Home</Button>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50/50">
+        <div className="text-center max-w-md p-8 bg-white rounded-2xl shadow-xl">
+          <div className="text-red-500 mb-4 text-lg">{error || "Group not found"}</div>
+          <Button onClick={() => router.push("/")} className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white">
+            Go Home
+          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <Link href="/">
-              <Button variant="ghost" size="sm">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold">{group.name}</h1>
-              {group.description && (
-                <p className="text-muted-foreground text-sm">{group.description}</p>
-              )}
-            </div>
-          </div>
+    <div className="min-h-screen bg-slate-50/50 flex flex-col">
+      <PageHeader title={group.name} subtitle={group.description || "Product Group Details"} />
+
+      {/* Sub Header with Back Button */}
+      <div className="bg-white border-b border-slate-200/60">
+        <div className="container mx-auto px-6 py-4">
+          <Link href="/">
+            <Button variant="ghost" size="sm" className="text-slate-600 hover:text-indigo-600">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Groups
+            </Button>
+          </Link>
         </div>
-      </header>
+        
+        {/* Tabs */}
+        <div className="container mx-auto px-6 pb-4">
+          <Tabs defaultValue="products" className="w-full flex justify-center">
+            <TabsList className="bg-slate-100/80 border border-slate-200/60 p-1 flex w-full md:w-auto justify-center">
+              <TabsTrigger value="products" className="data-[state=active]:bg-white data-[state=active]:text-indigo-700 data-[state=active]:shadow-sm flex-1 md:flex-none">
+                <Package className="h-4 w-4 mr-2 shrink-0" />
+                Products
+              </TabsTrigger>
+              <TabsTrigger value="members" className="data-[state=active]:bg-white data-[state=active]:text-indigo-700 data-[state=active]:shadow-sm flex-1 md:flex-none">
+                <Users className="h-4 w-4 mr-2 shrink-0" />
+                Members
+              </TabsTrigger>
+              <TabsTrigger value="settings" className="data-[state=active]:bg-white data-[state=active]:text-indigo-700 data-[state=active]:shadow-sm flex-1 md:flex-none">
+                <Settings className="h-4 w-4 mr-2 shrink-0" />
+                Settings
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+      </div>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-6 py-8 flex-1">
         <Tabs defaultValue="products" className="w-full">
-          <TabsList className="mb-6">
-            <TabsTrigger value="products">
-              <Package className="h-4 w-4 mr-2" />
-              Products
-            </TabsTrigger>
-            <TabsTrigger value="members">
-              <Users className="h-4 w-4 mr-2" />
-              Members
-            </TabsTrigger>
-            <TabsTrigger value="settings">
-              <Settings className="h-4 w-4 mr-2" />
-              Settings
-            </TabsTrigger>
-          </TabsList>
 
           <TabsContent value="products" className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-semibold">Products</h2>
-                <p className="text-muted-foreground">Manage products in this group</p>
+                <h2 className="text-2xl font-bold text-slate-800">Products</h2>
+                <p className="text-slate-500 mt-1">Manage products in this group</p>
               </div>
               <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogTrigger render={<Button />}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Product
+                <DialogTrigger asChild>
+                  <Button className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/25">
+                    <Plus className="h-4 w-4 mr-2" />
+                    New Product
+                  </Button>
                 </DialogTrigger>
-                <DialogContent>
+                <DialogContent className="sm:max-w-md">
                   <DialogHeader>
-                    <DialogTitle>Create Product</DialogTitle>
-                    <DialogDescription>Create a new product in this group.</DialogDescription>
+                    <DialogTitle className="text-xl font-semibold">Create Product</DialogTitle>
+                    <DialogDescription className="text-slate-500">Create a new product in this group.</DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
                     <div className="space-y-2">
-                      <Label htmlFor="name">Name *</Label>
+                      <Label htmlFor="name" className="text-sm font-medium text-slate-700">Name *</Label>
                       <Input
                         id="name"
                         value={newProductName}
                         onChange={(e) => setNewProductName(e.target.value)}
                         placeholder="Enter product name"
+                        className="h-11"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="description">Description</Label>
+                      <Label htmlFor="description" className="text-sm font-medium text-slate-700">Description</Label>
                       <Input
                         id="description"
                         value={newProductDesc}
                         onChange={(e) => setNewProductDesc(e.target.value)}
                         placeholder="Enter description"
+                        className="h-11"
                       />
                     </div>
                   </div>
-                  <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleCreateProduct} disabled={!newProductName.trim()}>Create</Button>
+                  <div className="flex justify-end gap-3">
+                    <Button variant="outline" onClick={() => setDialogOpen(false)} className="px-6">Cancel</Button>
+                    <Button onClick={handleCreateProduct} disabled={!newProductName.trim()} className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white px-6">
+                      Create
+                    </Button>
                   </div>
                 </DialogContent>
               </Dialog>
             </div>
 
-            <Separator />
-
             {products.length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground mb-4">No products yet</p>
-                  <Button onClick={() => setDialogOpen(true)}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create your first product
-                  </Button>
-                </CardContent>
-              </Card>
+              <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-12 text-center">
+                <div className="w-20 h-20 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <Package className="h-10 w-10 text-slate-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-slate-800 mb-2">No products yet</h3>
+                <p className="text-slate-500 mb-6 max-w-sm mx-auto">Create your first product to start organizing requirements</p>
+                <Button onClick={() => setDialogOpen(true)} className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/25">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create your first product
+                </Button>
+              </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {products.map((product) => (
                   <Link key={product.id} href={`/products/${product.id}`}>
-                    <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-                      <CardHeader>
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <CardTitle className="text-lg">{product.name}</CardTitle>
+                    <Card className="group bg-white rounded-xl border border-slate-200/60 shadow-sm hover:shadow-xl hover:shadow-indigo-500/5 hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden">
+                      <div className="h-1.5 bg-gradient-to-r from-indigo-500 to-purple-600" />
+                      <CardHeader className="pt-5">
+                        <div className="flex items-start gap-4">
+                          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25 group-hover:scale-110 transition-transform duration-300">
+                            <Package className="h-6 w-6 text-white" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <CardTitle className="text-lg font-semibold text-slate-800 group-hover:text-indigo-600 transition-colors truncate">
+                              {product.name}
+                            </CardTitle>
                             {product.description && (
-                              <CardDescription className="mt-1">{product.description}</CardDescription>
+                              <CardDescription className="mt-1 text-slate-500 line-clamp-2">
+                                {product.description}
+                              </CardDescription>
                             )}
                           </div>
-                          <Package className="h-5 w-5 text-muted-foreground" />
                         </div>
                       </CardHeader>
                       <CardContent>
-                        <div className="flex items-center justify-between">
-                          <Badge variant="secondary">Active</Badge>
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(product.created_at).toLocaleDateString()}
-                          </span>
+                        <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                          <Badge className="px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                            Active
+                          </Badge>
+                          <div className="flex items-center gap-2 text-xs text-slate-400">
+                            <span>{new Date(product.created_at).toLocaleDateString()}</span>
+                            <ArrowRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity -translate-x-1 group-hover:translate-x-0" />
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -251,30 +272,28 @@ export default function ProductGroupDetailPage() {
           </TabsContent>
 
           <TabsContent value="members">
-            <Card>
-              <CardHeader>
-                <CardTitle>Members</CardTitle>
-                <CardDescription>Group members and permissions</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">Member management coming soon...</p>
-              </CardContent>
-            </Card>
+            <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-8">
+              <div className="w-16 h-16 bg-slate-50 rounded-xl flex items-center justify-center mb-4">
+                <Users className="h-8 w-8 text-slate-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-slate-800 mb-2">Members</h3>
+              <p className="text-slate-500">Group members and permissions management coming soon...</p>
+            </div>
           </TabsContent>
 
           <TabsContent value="settings">
-            <Card>
-              <CardHeader>
-                <CardTitle>Settings</CardTitle>
-                <CardDescription>Group settings and configuration</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">Settings coming soon...</p>
-              </CardContent>
-            </Card>
+            <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-8">
+              <div className="w-16 h-16 bg-slate-50 rounded-xl flex items-center justify-center mb-4">
+                <Settings className="h-8 w-8 text-slate-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-slate-800 mb-2">Settings</h3>
+              <p className="text-slate-500">Group settings and configuration coming soon...</p>
+            </div>
           </TabsContent>
         </Tabs>
       </main>
+
+      <PageFooter />
     </div>
   );
 }
