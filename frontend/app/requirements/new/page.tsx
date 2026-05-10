@@ -14,7 +14,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { PageFooter } from "@/components/PageFooter";
 import Link from "next/link";
 
-const API_BASE_URL = "http://100.73.184.77:8020";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 interface Product {
   id: string;

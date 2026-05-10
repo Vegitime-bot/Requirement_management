@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,17 +10,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, FileText, Sparkles, CheckCircle, AlertCircle, GitCompare } from "lucide-react";
+import { ArrowLeft, FileText, Sparkles, CheckCircle, AlertCircle, GitCompare, Tag } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { PageFooter } from "@/components/PageFooter";
 import Link from "next/link";
 
-const API_BASE_URL = "http://100.73.184.77:8020";
+const API_BASE_URL = "/api";
 
 interface ExtractedReq {
   title: string;
   description: string;
   priority: string;
+  category?: string;
+  category_id?: string;
   confidence: number;
   is_product_requirement: boolean;
   reason: string;
@@ -30,6 +34,13 @@ interface Suggestion {
   reason: string;
   existing_id?: string;
   similarity?: number;
+}
+
+interface SuggestedCategory {
+  code: string;
+  name: string;
+  reason: string;
+  example_requirements: string[];
 }
 
 export default function IngestPage() {
@@ -45,6 +56,9 @@ export default function IngestPage() {
   const [selectedActions, setSelectedActions] = useState<Record<number, string>>({});
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [categories, setCategories] = useState<Array<{id: string, name: string, code: string}>>([]);
+  const [suggestedCategories, setSuggestedCategories] = useState<SuggestedCategory[]>([]);
+  const [approvedCategories, setApprovedCategories] = useState<Set<string>>(new Set());
 
   const handleAnalyze = async () => {
     if (!contextText.trim()) {
@@ -62,6 +76,13 @@ export default function IngestPage() {
     console.log("[DEBUG] Sending request:", { productId, contextText, sourceType });
 
     try {
+      // Fetch categories for this product
+      const catRes = await fetch(`${API_BASE_URL}/products/${productId}/categories/`);
+      if (catRes.ok) {
+        const catData = await catRes.json();
+        setCategories(catData);
+      }
+
       const res = await fetch(`${API_BASE_URL}/ingest/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -90,6 +111,8 @@ export default function IngestPage() {
       const data = await res.json();
       setExtracted(data.extracted);
       setSuggestions(data.suggestions);
+      setSuggestedCategories(data.suggested_categories || []);
+      setApprovedCategories(new Set()); // Reset
       
       // Initialize selected actions from suggestions
       const initial: Record<number, string> = {};
@@ -116,6 +139,14 @@ export default function IngestPage() {
         existing_id: suggestions.find(s => s.extracted_index === parseInt(idx))?.existing_id,
       }));
 
+      // Build approved categories list
+      const approvedCats = suggestedCategories
+        .filter(cat => approvedCategories.has(cat.code))
+        .map(cat => ({
+          code: cat.code,
+          name: cat.name,
+        }));
+
       const res = await fetch(`${API_BASE_URL}/ingest/apply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -123,6 +154,7 @@ export default function IngestPage() {
           product_id: productId,
           extracted_requirements: extracted,
           actions,
+          suggested_categories: approvedCats,
         }),
       });
 
@@ -161,6 +193,11 @@ export default function IngestPage() {
       low: "bg-slate-100 text-slate-700 border-slate-200",
     };
     return styles[priority] || styles.low;
+  };
+
+  const getCategoryBadge = (category?: string) => {
+    if (!category) return "bg-amber-50 text-amber-700 border-amber-200";
+    return "bg-indigo-50 text-indigo-700 border-indigo-200";
   };
 
   return (
@@ -284,6 +321,79 @@ Deadline: End of month.`}
               </div>
             </div>
 
+            {/* Suggested Categories Banner */}
+            {suggestedCategories.length > 0 && (
+              <Card className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200/60 shadow-sm">
+                <CardContent className="pt-6 pb-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Tag className="h-5 w-5 text-indigo-500" />
+                    <h3 className="text-lg font-semibold text-indigo-900">Suggested New Categories</h3>
+                    <Badge className="ml-auto px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 border-0">
+                      {suggestedCategories.length} suggested
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-indigo-600 mb-4">
+                    The following categories were mentioned in the extracted requirements but don't exist yet. 
+                    Check the ones you want to create before applying.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {suggestedCategories.map((cat) => (
+                      <div
+                        key={cat.code}
+                        onClick={() => {
+                          setApprovedCategories(prev => {
+                            const next = new Set(prev);
+                            if (next.has(cat.code)) {
+                              next.delete(cat.code);
+                            } else {
+                              next.add(cat.code);
+                            }
+                            return next;
+                          });
+                        }}
+                        className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                          approvedCategories.has(cat.code)
+                            ? "border-indigo-400 bg-white shadow-md"
+                            : "border-slate-200 bg-white/60 hover:border-indigo-200"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${
+                            approvedCategories.has(cat.code)
+                              ? "bg-indigo-500 border-indigo-500"
+                              : "border-slate-300"
+                          }`}>
+                            {approvedCategories.has(cat.code) && (
+                              <CheckCircle className="h-3.5 w-3.5 text-white" />
+                            )}
+                          </div>
+                          <span className="font-semibold text-slate-800">{cat.code}</span>
+                          <span className="text-sm text-slate-500">- {cat.name}</span>
+                        </div>
+                        <p className="text-xs text-slate-500 mb-2">{cat.reason}</p>
+                        {cat.example_requirements && cat.example_requirements.length > 0 && (
+                          <div className="text-xs text-slate-400">
+                            Examples: {cat.example_requirements.slice(0, 2).join(", ")}
+                            {cat.example_requirements.length > 2 && "..."}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 flex items-center gap-2 text-sm">
+                    <span className="text-slate-500">
+                      {approvedCategories.size} of {suggestedCategories.length} selected
+                    </span>
+                    {approvedCategories.size === 0 && (
+                      <span className="text-amber-600">
+                        (Categories won't be created — requirements may show &quot;No Category&quot;)
+                      </span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <div className="space-y-4">
               {extracted.map((req, idx) => {
                 const suggestion = suggestions.find(s => s.extracted_index === idx);
@@ -298,34 +408,62 @@ Deadline: End of month.`}
                       <div className="flex items-start gap-4">
                         {/* Checkbox for selection */}
                         <div className="pt-1 shrink-0">
-                          {!isProductReq ? (
-                            <Badge className="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200">
-                              Skip
-                            </Badge>
-                          ) : (
-                            <Select
-                              value={selectedActions[idx] || "skip"}
-                              onValueChange={(v) => setSelectedActions({
-                                ...selectedActions,
-                                [idx]: v || 'skip'
-                              })}
-                            >
-                              <SelectTrigger className={`w-32 text-white border-0 ${getActionColor(selectedActions[idx])}`}>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent className="bg-white">
-                                <SelectItem value="create">➕ Create New</SelectItem>
-                                <SelectItem value="update">📝 Update Existing</SelectItem>
-                                <SelectItem value="skip">⏭️ Skip</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          )}
+                          <Select
+                            value={selectedActions[idx] || "skip"}
+                            onValueChange={(v) => setSelectedActions({
+                              ...selectedActions,
+                              [idx]: v || 'skip'
+                            })}
+                          >
+                            <SelectTrigger className={`w-32 text-white border-0 ${getActionColor(selectedActions[idx])}`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-white">
+                              <SelectItem value="create">➕ Create New</SelectItem>
+                              <SelectItem value="update">📝 Update Existing</SelectItem>
+                              <SelectItem value="skip">⏭️ Skip</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
 
                         <div className="flex-1 min-w-0">
                           {/* Header */}
                           <div className="flex items-center gap-2 mb-2 flex-wrap">
                             <span className="font-semibold text-slate-800">{req.title}</span>
+                            {/* Category selector */}
+                        {categories.length > 0 && (
+                          <Select
+                            value={req.category_id || "__none__"}
+                            onValueChange={(v) => {
+                              const newCatId = v === "__none__" ? undefined : v;
+                              setExtracted(prev => prev.map((r, i) => 
+                                i === idx ? { ...r, category_id: newCatId, category: categories.find(c => c.id === newCatId)?.code || r.category } : r
+                              ));
+                            }}
+                          >
+                            <SelectTrigger className="w-32 h-7 text-xs border-slate-200">
+                              <SelectValue placeholder="Category" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-white">
+                              <SelectItem value="__none__">No Category</SelectItem>
+                              {categories.map(cat => (
+                                <SelectItem key={cat.id} value={cat.id}>
+                                  {cat.code ? `${cat.code} - ${cat.name}` : cat.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                        {req.category_id && (
+                          <Badge className={`px-2 py-0.5 rounded-full text-xs font-medium border ${getCategoryBadge(req.category)}`}>
+                            {categories.find(c => c.id === req.category_id)?.code || req.category || "Cat"}
+                          </Badge>
+                        )}
+                        {!req.category_id && req.category && (
+                          <Badge className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                            ⚠️ {req.category}
+                          </Badge>
+                        )}
                             <Badge className={`px-2 py-0.5 rounded-full text-xs font-medium border ${getPriorityBadge(req.priority)}`}>
                               {req.priority}
                             </Badge>

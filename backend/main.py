@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from sqlmodel import SQLModel, create_engine
 import os
 
-from .routers import auth, product_groups, requirements
+from routers import auth, product_groups, requirements
 
 # Database setup - SQLite for demo
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./rms.db")

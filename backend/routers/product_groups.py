@@ -3,9 +3,9 @@ from typing import List, Optional
 from pydantic import BaseModel
 from sqlmodel import Session
 
-from ..models import ProductGroup, ProductMembership, User
-from ..database import get_db
-from ..crud import (
+from models import ProductGroup, ProductMembership, User
+from database import get_db
+from crud import (
     create_product_group, get_product_group, list_user_product_groups,
     create_membership_request, approve_membership, get_pending_memberships
 )

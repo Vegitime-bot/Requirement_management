@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,7 +16,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { PageFooter } from "@/components/PageFooter";
 import Link from "next/link";
 
-const API_BASE_URL = "http://100.73.184.77:8020";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 interface Requirement {
   id: string;
@@ -254,9 +255,11 @@ export default function RequirementDetailPage() {
                 </Button>
                 
                 <AlertDialog>
-                  <AlertDialogTrigger render={<Button variant="outline" size="sm" className="border-red-200 text-red-600 hover:bg-red-50" />}>
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="border-red-200 text-red-600 hover:bg-red-50">
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent className="bg-white">
                     <AlertDialogHeader>
@@ -389,12 +392,12 @@ export default function RequirementDetailPage() {
                   {isEditing && categories.length > 0 && (
                     <div className="space-y-2">
                       <Label className="text-sm font-medium text-slate-700">Category</Label>
-                      <Select value={editCategoryId} onValueChange={(v) => setEditCategoryId(v || '')}>
+                      <Select value={editCategoryId || ""} onValueChange={(v) => setEditCategoryId(v || undefined)}>
                         <SelectTrigger className="h-11 border-slate-200">
                           <SelectValue placeholder="Select category" />
                         </SelectTrigger>
                         <SelectContent className="bg-white">
-                          <SelectItem value={undefined}>None</SelectItem>
+                          <SelectItem value="">None</SelectItem>
                           {categories.map((c) => (
                             <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                           ))}
@@ -480,7 +483,7 @@ export default function RequirementDetailPage() {
                     </div>
                   </div>
 
-                  {req.category_id && (
+                  {req.category_id ? (
                     <div className="flex items-start gap-3">
                       <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center shrink-0">
                         <FileText className="h-4 w-4 text-purple-500" />
@@ -490,7 +493,17 @@ export default function RequirementDetailPage() {
                         <p className="font-medium text-slate-800">{categories.find(c => c.id === req.category_id)?.name || "Unknown"}</p>
                       </div>
                     </div>
-                  )}
+                  ) : categories.length > 0 ? (
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                        <FileText className="h-4 w-4 text-amber-500" />
+                      </div>
+                      <div>
+                        <p className="text-slate-500">Category</p>
+                        <p className="font-medium text-amber-600">Not set</p>
+                      </div>
+                    </div>
+                  ) : null}
 
                   {req.variant_id && (
                     <div className="flex items-start gap-3">

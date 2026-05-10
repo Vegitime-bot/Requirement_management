@@ -30,7 +30,7 @@ interface Product {
   created_at: string;
 }
 
-const API_BASE_URL = "http://100.73.184.77:8020";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 export default function ProductGroupDetailPage() {
   const params = useParams();

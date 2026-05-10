@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List
 from sqlmodel import Session, select
-from ..models import User
+from models import User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

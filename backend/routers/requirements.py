@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Optional
 from pydantic import BaseModel
 from sqlmodel import Session, select
-from ..models import Requirement, RequirementAction, RequirementDraft, User
-from ..routers.auth import get_current_user
+from models import Requirement, RequirementAction, RequirementDraft, User
+from routers.auth import get_current_user
 
 router = APIRouter(prefix="/requirements", tags=["requirements"])
 

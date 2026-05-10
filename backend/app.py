@@ -1256,6 +1256,9 @@ def delete_requirement(session: Session, req_id: str) -> bool:
     return True
 
 # Requirements Router
+# Standalone requirements router (for direct requirement access)
+standalone_requirements_router = APIRouter(prefix="/requirements", tags=["requirements"])
+
 requirements_router = APIRouter(prefix="/products/{product_id}/requirements", tags=["requirements"])
 
 class RequirementCreate(BaseModel):
@@ -1301,6 +1304,27 @@ class RequirementActionResponse(BaseModel):
     class Config:
         from_attributes = True
 
+# ── STANDALONE REQUIREMENT ENDPOINTS ──
+@standalone_requirements_router.get("/{req_id}", response_model=RequirementResponse)
+def get_requirement_by_id(req_id: str, db: Session = Depends(get_db)):
+    """Get a requirement by its ID (standalone endpoint for frontend compatibility)."""
+    statement = select(Requirement).where(Requirement.id == req_id)
+    requirement = db.exec(statement).first()
+    if not requirement:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+    return requirement
+
+@standalone_requirements_router.get("/{req_id}/actions", response_model=List[RequirementActionResponse])
+def get_requirement_actions_by_id(req_id: str, db: Session = Depends(get_db)):
+    """Get action history for a requirement (standalone endpoint)."""
+    statement = select(Requirement).where(Requirement.id == req_id)
+    requirement = db.exec(statement).first()
+    if not requirement:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+    statement = select(RequirementAction).where(RequirementAction.requirement_id == req_id).order_by(RequirementAction.performed_at.desc())
+    return db.exec(statement).all()
+
+# ── PRODUCT-SCOPED REQUIREMENT ENDPOINTS ──
 @requirements_router.get("/", response_model=List[RequirementResponse])
 def list_requirements_endpoint(
     product_id: str,
@@ -1504,16 +1528,20 @@ class ExtractedRequirementResponse(BaseModel):
     confidence: float
     is_product_requirement: bool
     reason: str
+    category: Optional[str] = None
+    category_id: Optional[str] = None
 
 class IngestResponse(BaseModel):
     extracted: List[ExtractedRequirementResponse]
     existing_requirements: List[RequirementResponse]
     suggestions: List[dict]
+    suggested_categories: List[dict] = []  # [{"code": "CORE", "name": "Core Functionality", "reason": "..."}]
 
 class ApplyIngestRequest(BaseModel):
     product_id: str
     extracted_requirements: List[ExtractedRequirementResponse]
     actions: List[dict]  # [{"type": "create"|"update", "extracted_index": int, "existing_id": str|null}]
+    suggested_categories: Optional[List[dict]] = None  # [{"code": "CORE", "name": "Core"}] — categories to create
 
 @ingest_router.post("/analyze", response_model=IngestResponse)
 async def analyze_context(
@@ -1526,19 +1554,118 @@ async def analyze_context(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     
-    # Call LLM for extraction
-    extracted = await llm_service.extract_requirements(request.context_text, request.source_type)
+    # Load categories for this product for LLM classification
+    statement = select(Category).where(Category.product_id == request.product_id)
+    categories = db.exec(statement).all()
+    category_list = [{"id": c.id, "code": c.code, "name": c.name, "description": c.description} for c in categories]
+    
+    # Call LLM for extraction with categories
+    extracted = await llm_service.extract_requirements(request.context_text, request.source_type, category_list)
     
     # Get existing requirements for comparison
     existing = list_requirements(db, request.product_id)
     
+    # Build category code -> id mapping for suggestions (case-insensitive)
+    cat_code_map = {c.code.upper(): c.id for c in categories if c.code}
+    cat_name_map = {c.name.upper(): c.id for c in categories if c.name}  # name-based fallback
+    
+    # Map category codes to category_ids for each extracted requirement
+    for e in extracted:
+        if not e.category:
+            continue
+        
+        cat_upper = e.category.strip().upper()
+        
+        # 1. Exact code match
+        if cat_upper in cat_code_map:
+            e.category_id = cat_code_map[cat_upper]
+            continue
+        
+        # 2. Exact name match
+        if cat_upper in cat_name_map:
+            e.category_id = cat_name_map[cat_upper]
+            continue
+        
+        # 3. Substring match (code or name contains the category text)
+        for c in categories:
+            if c.code and cat_upper in c.code.upper():
+                e.category_id = c.id
+                break
+            if c.name and cat_upper in c.name.upper():
+                e.category_id = c.id
+                break
+        
+        # 4. Reverse substring (category text contains code or name)
+        if not e.category_id:
+            for c in categories:
+                if c.code and c.code.upper() in cat_upper:
+                    e.category_id = c.id
+                    break
+                if c.name and c.name.upper() in cat_upper:
+                    e.category_id = c.id
+                    break
+    
     # Generate suggestions
     suggestions = await generate_ingest_suggestions(extracted, existing, db)
+    
+    # Collect suggested categories (for new categories that don't exist yet)
+    suggested_categories = []
+    seen_cat_codes = set()
+    
+    for e in extracted:
+        if not e.is_product_requirement or not e.category:
+            continue
+        
+        # Skip if already mapped to existing category
+        if e.category_id:
+            continue
+        
+        cat_code = e.category.strip().upper()
+        if cat_code in seen_cat_codes:
+            continue
+        seen_cat_codes.add(cat_code)
+        
+        # Generate a readable name from code
+        cat_name = cat_code.title()
+        if cat_code == "CORE":
+            cat_name = "Core Functionality"
+        elif cat_code == "SEC":
+            cat_name = "Security"
+        elif cat_code == "UI":
+            cat_name = "User Interface"
+        elif cat_code == "PERF":
+            cat_name = "Performance"
+        elif cat_code == "API":
+            cat_name = "API / Integration"
+        elif cat_code == "DB":
+            cat_name = "Database"
+        elif cat_code == "INFRA":
+            cat_name = "Infrastructure"
+        elif cat_code == "TEST":
+            cat_name = "Testing"
+        elif cat_code == "DOC":
+            cat_name = "Documentation"
+        elif cat_code == "COMPLIANCE":
+            cat_name = "Compliance"
+        
+        # Collect requirements that would use this category
+        reqs_using = [ext.title for ext in extracted 
+                      if ext.is_product_requirement 
+                      and ext.category 
+                      and ext.category.strip().upper() == cat_code]
+        
+        suggested_categories.append({
+            "code": cat_code,
+            "name": cat_name,
+            "reason": f"Mentioned in {len(reqs_using)} requirement(s)",
+            "example_requirements": reqs_using[:3]  # max 3 examples
+        })
     
     return {
         "extracted": [e.model_dump() for e in extracted],
         "existing_requirements": existing,
-        "suggestions": suggestions
+        "suggestions": suggestions,
+        "suggested_categories": suggested_categories
     }
 
 async def generate_ingest_suggestions(
@@ -1613,6 +1740,39 @@ async def apply_ingest(
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
     
+    # Step 1: Create suggested categories first
+    created_categories = {}
+    if request.suggested_categories:
+        for cat_data in request.suggested_categories:
+            code = cat_data.get("code", "").strip().upper()
+            name = cat_data.get("name", code).strip()
+            if not code or not name:
+                continue
+            
+            # Check if category already exists
+            existing_cat = db.exec(
+                select(Category).where(
+                    Category.product_id == request.product_id,
+                    Category.code == code
+                )
+            ).first()
+            
+            if existing_cat:
+                created_categories[code] = existing_cat.id
+                continue
+            
+            # Create new category
+            new_cat = create_category(
+                db, request.product_id, name, code, 
+                f"Auto-created from ingest: {cat_data.get('reason', '')}",
+                current_user.id
+            )
+            created_categories[code] = new_cat.id
+    
+    # Refresh category mapping after creation
+    all_categories = list_product_categories(db, request.product_id)
+    cat_code_map = {c.code.upper(): c.id for c in all_categories if c.code}
+    
     results = []
     
     for action in request.actions:
@@ -1629,19 +1789,31 @@ async def apply_ingest(
             continue
         
         if action_type == "create":
+            # Resolve category_id using updated mapping
+            resolved_category_id = ext.category_id
+            if not resolved_category_id and ext.category:
+                cat_code = ext.category.strip().upper()
+                resolved_category_id = cat_code_map.get(cat_code)
+            
             req = create_requirement(
                 db, request.product_id, ext.title, ext.description,
-                None, None, ext.priority, current_user.id
+                resolved_category_id, None, ext.priority, current_user.id
             )
-            results.append({"action": "create", "id": req.id, "title": req.title})
+            results.append({"action": "create", "id": req.id, "title": req.title, "category_id": resolved_category_id})
         
         elif action_type == "update" and action.get("existing_id"):
+            # Resolve category_id using updated mapping
+            resolved_category_id = ext.category_id
+            if not resolved_category_id and ext.category:
+                cat_code = ext.category.strip().upper()
+                resolved_category_id = cat_code_map.get(cat_code)
+            
             updated = update_requirement(
                 db, action["existing_id"], ext.title, ext.description,
-                None, ext.priority, None, current_user.id
+                None, ext.priority, resolved_category_id, current_user.id
             )
             if updated:
-                results.append({"action": "update", "id": updated.id, "title": updated.title})
+                results.append({"action": "update", "id": updated.id, "title": updated.title, "category_id": resolved_category_id})
     
     return {"results": results, "applied_count": len([r for r in results if r["action"] != "skip"])}
 
@@ -1903,6 +2075,7 @@ app.include_router(products_router)
 app.include_router(variants_router)
 app.include_router(standalone_variants_router)
 app.include_router(categories_router)
+app.include_router(standalone_requirements_router)
 app.include_router(requirements_router)
 app.include_router(ingest_router)
 app.include_router(versions_router)

@@ -45,7 +45,7 @@ interface Category {
   created_at: string;
 }
 
-const API_BASE_URL = "http://100.73.184.77:8020";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 const statusStyles: Record<string, string> = {
   draft: "bg-slate-100 text-slate-700 border-slate-200",

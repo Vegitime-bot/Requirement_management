@@ -53,7 +53,7 @@ interface Requirement {
   updated_at: string;
 }
 
-const API_BASE_URL = "http://100.73.184.77:8020";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 const statusStyles: Record<string, string> = {
   draft: "bg-slate-100 text-slate-700 border-slate-200",
@@ -559,12 +559,17 @@ export default function ProductDetailPage() {
                       </CardHeader>
                       <CardContent className="pt-0">
                         <div className="flex items-center gap-4 text-sm text-slate-500">
-                          {req.category_id && (
+                          {req.category_id ? (
                             <span className="flex items-center gap-1">
                               <Tag className="h-3.5 w-3.5" />
                               {categories.find(c => c.id === req.category_id)?.name || "Unknown"}
                             </span>
-                          )}
+                          ) : categories.length > 0 ? (
+                            <span className="flex items-center gap-1 text-amber-500">
+                              <Tag className="h-3.5 w-3.5" />
+                              No Category
+                            </span>
+                          ) : null}
                           {req.variant_id && (
                             <span className="flex items-center gap-1">
                               <Layers className="h-3.5 w-3.5" />
