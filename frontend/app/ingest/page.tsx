@@ -15,7 +15,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { PageFooter } from "@/components/PageFooter";
 import Link from "next/link";
 
-const API_BASE_URL = "/api";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 interface ExtractedReq {
   title: string;
@@ -73,8 +73,6 @@ export default function IngestPage() {
     setStep("analyzing");
     setError(null);
 
-    console.log("[DEBUG] Sending request:", { productId, contextText, sourceType });
-
     try {
       // Fetch categories for this product
       const catRes = await fetch(`${API_BASE_URL}/products/${productId}/categories/`);
@@ -93,11 +91,9 @@ export default function IngestPage() {
         }),
       });
 
-      console.log("[DEBUG] Response status:", res.status);
-
       if (!res.ok) {
         const errText = await res.text().catch(() => "Unknown error");
-        console.error("[DEBUG] Error response:", errText);
+
         let errMsg = `Analysis failed (${res.status})`;
         try {
           const errData = JSON.parse(errText);
@@ -129,9 +125,12 @@ export default function IngestPage() {
   };
 
   const handleApply = async () => {
-    if (!productId) return;
-
+    if (!productId) {
+      return;
+    }
     setApplying(true);
+    setError(null);
+    
     try {
       const actions = Object.entries(selectedActions).map(([idx, action]) => ({
         extracted_index: parseInt(idx),
@@ -139,7 +138,6 @@ export default function IngestPage() {
         existing_id: suggestions.find(s => s.extracted_index === parseInt(idx))?.existing_id,
       }));
 
-      // Build approved categories list
       const approvedCats = suggestedCategories
         .filter(cat => approvedCategories.has(cat.code))
         .map(cat => ({
@@ -147,23 +145,67 @@ export default function IngestPage() {
           name: cat.name,
         }));
 
-      const res = await fetch(`${API_BASE_URL}/ingest/apply`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          product_id: productId,
-          extracted_requirements: extracted,
-          actions,
-          suggested_categories: approvedCats,
-        }),
-      });
+      const requestBody = {
+        product_id: productId,
+        extracted_requirements: extracted,
+        actions,
+        suggested_categories: approvedCats,
+      };
 
-      if (!res.ok) throw new Error("Failed to apply");
 
+
+      // Use window.fetch to bypass Next.js caching
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+
+        controller.abort();
+      }, 30000);
+
+      let res;
+      try {
+        res = await window.fetch(`${API_BASE_URL}/ingest/apply`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+      } catch (fetchErr: any) {
+        clearTimeout(timeoutId);
+        if (fetchErr.name === 'AbortError') {
+          throw new Error("Request timed out after 30 seconds. Please try again.");
+        }
+        throw new Error(`Network error: ${fetchErr.message}`);
+      }
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "Unknown error");
+
+        let errMsg = `Apply failed (${res.status})`;
+        try {
+          const errData = JSON.parse(errText);
+          errMsg = errData.detail || errMsg;
+        } catch {
+          if (errText) errMsg += `: ${errText.substring(0, 200)}`;
+        }
+        throw new Error(errMsg);
+      }
+
+      const data = await res.json();
       // Navigate to product requirements
-      router.push(`/products/${productId}`);
+      try {
+        await router.push(`/products/${productId}`);
+
+      } catch (navErr: any) {
+
+        // Navigation failed but apply succeeded
+        setError("Applied successfully but failed to navigate. Please refresh the page.");
+      }
     } catch (err: any) {
-      setError(err.message);
+
+      setError(err.message || "An unexpected error occurred");
+    } finally {
+
       setApplying(false);
     }
   };
