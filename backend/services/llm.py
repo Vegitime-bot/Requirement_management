@@ -220,7 +220,7 @@ class LLMService:
                 if code and name:
                     cat_lines.append(f'  "{code}" - {name}' + (f' ({desc})' if desc else ''))
             if cat_lines:
-                category_guidance = "CATEGORY CLASSIFICATION:\nFor each requirement, assign the most appropriate category code from the following list:\n\n" + "\n".join(cat_lines) + "\n\nIf none match closely, use \"OTHER\" or leave category empty.\n"
+                category_guidance = "CATEGORY CLASSIFICATION:\nFor each requirement, first try to assign the most appropriate category code from the following existing list:\n\n" + "\n".join(cat_lines) + "\n\nIf none of the existing categories match closely, you MAY suggest a NEW category code (short uppercase abbreviation like SEC, UI, CORE, PERF, etc.) that describes the requirement's domain. The new category should be descriptive and unique.\n"
         else:
             # No categories defined - ask LLM to suggest appropriate categories
             category_guidance = "CATEGORY CLASSIFICATION:\nNo categories have been defined for this product yet. For each requirement, suggest an appropriate category code (short uppercase abbreviation like SEC, UI, CORE, PERF, etc.) based on the requirement's nature. The category should describe the domain/area of the requirement (e.g., security, user interface, performance, core functionality).\n"
